@@ -3,6 +3,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUserStore } from '../../stores/userStore';
 
 const SETUP_PATHS = ['/welcome', '/setup'];
+const ALWAYS_ALLOWED_PATHS = ['/profile'];
 
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
@@ -25,7 +26,7 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     return <Navigate to="/login" replace />;
   }
 
-  if (user && !user.hasCompletedSetup && !SETUP_PATHS.includes(location.pathname)) {
+  if (user && !user.hasCompletedSetup && !SETUP_PATHS.includes(location.pathname) && !ALWAYS_ALLOWED_PATHS.includes(location.pathname)) {
     return <Navigate to="/welcome" replace />;
   }
 
