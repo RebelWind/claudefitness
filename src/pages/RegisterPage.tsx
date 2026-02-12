@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
+import { supabase } from '../lib/supabase';
+import { createNewProgram, generateProgramKey } from '../lib/n8nService';
+import { saveUserProgram } from '../lib/programService';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 
@@ -12,10 +15,12 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [statusMsg, setStatusMsg] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setStatusMsg('');
 
     if (!name || !email || !password) {
       setError('Lütfen tüm alanları doldurun.');
@@ -28,14 +33,48 @@ export default function RegisterPage() {
     }
 
     setLoading(true);
+
+    // 1. Register with Supabase Auth
+    setStatusMsg('Hesap oluşturuluyor...');
     const errorMsg = await register(email, password, name);
-    setLoading(false);
 
     if (errorMsg) {
+      setLoading(false);
+      setStatusMsg('');
       setError(errorMsg);
-    } else {
-      navigate('/welcome', { replace: true });
+      return;
     }
+
+    // 2. Create program via n8n webhook
+    try {
+      setStatusMsg('Program dosyası oluşturuluyor...');
+      const programKey = generateProgramKey();
+      const programName = `${programKey}-SuperHeroDongu`;
+
+      const result = await createNewProgram(programKey);
+
+      // 3. Save to Supabase DB
+      setStatusMsg('Program kaydediliyor...');
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+
+      if (userId) {
+        await saveUserProgram(
+          userId,
+          programKey,
+          programName,
+          result.googleFileId,
+          result.googleFileName,
+        );
+      }
+    } catch (err) {
+      // Log but don't block registration — program can be retried later
+      console.error('Program oluşturma hatası:', err);
+    }
+
+    setLoading(false);
+    setStatusMsg('');
+    navigate('/welcome', { replace: true });
   };
 
   return (
@@ -76,8 +115,12 @@ export default function RegisterPage() {
             <p className="text-sm text-error text-center">{error}</p>
           )}
 
+          {statusMsg && (
+            <p className="text-sm text-primary-light text-center animate-pulse">{statusMsg}</p>
+          )}
+
           <Button type="submit" fullWidth size="lg" className="mt-2" disabled={loading}>
-            {loading ? 'Kayıt olunuyor...' : 'Kayıt Ol'}
+            {loading ? 'İşleniyor...' : 'Kayıt Ol'}
           </Button>
         </form>
 
