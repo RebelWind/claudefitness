@@ -4,7 +4,7 @@ import { useWorkoutStore } from '../stores/workoutStore';
 import { useProgramStore } from '../stores/programStore';
 import { getCurrentWeek, getNextWorkout, getCompletedWorkoutCount } from '../lib/programScheduler';
 import { WORKOUT_TEMPLATES } from '../constants/workouts';
-import { EXERCISES } from '../constants/exercises';
+import { EXERCISES, GROUP_COLORS } from '../constants/exercises';
 import Header from '../components/layout/Header';
 import PageContainer from '../components/layout/PageContainer';
 import Card from '../components/ui/Card';
@@ -101,12 +101,17 @@ export default function DashboardPage() {
             </div>
 
             <div className="flex flex-col gap-1.5 mb-4">
-              {WORKOUT_TEMPLATES[nextWorkout.type].exercises.map(exId => (
-                <div key={exId} className="flex items-center gap-2 text-sm">
-                  <div className="w-1.5 h-1.5 rounded-full bg-primary-light" />
-                  <span className="text-text-muted">{EXERCISES[exId].name}</span>
-                </div>
-              ))}
+              {WORKOUT_TEMPLATES[nextWorkout.type].exercises.map(exId => {
+                const ex = EXERCISES[exId];
+                const dotColor = GROUP_COLORS[ex.group].dot;
+                return (
+                  <div key={exId} className="flex items-center gap-2 text-sm">
+                    <div className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                    <span className="text-text-muted">{ex.name}</span>
+                    <span className={`text-[10px] ${GROUP_COLORS[ex.group].text}`}>{ex.group}</span>
+                  </div>
+                );
+              })}
             </div>
 
             <Button

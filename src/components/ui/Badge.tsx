@@ -1,6 +1,10 @@
+import type { ExerciseGroup } from '../../types/exercise';
+import { GROUP_COLORS } from '../../constants/exercises';
+
 interface BadgeProps {
   children: React.ReactNode;
   variant?: 'default' | 'success' | 'warning' | 'error' | 'accent';
+  group?: ExerciseGroup;
 }
 
 const variants = {
@@ -11,9 +15,13 @@ const variants = {
   accent: 'bg-accent/15 text-accent',
 };
 
-export default function Badge({ children, variant = 'default' }: BadgeProps) {
+export default function Badge({ children, variant = 'default', group }: BadgeProps) {
+  const cls = group
+    ? `${GROUP_COLORS[group].bg} ${GROUP_COLORS[group].text}`
+    : variants[variant];
+
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${variants[variant]}`}>
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${cls}`}>
       {children}
     </span>
   );

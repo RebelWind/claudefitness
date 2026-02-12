@@ -1,4 +1,4 @@
-import type { Exercise, ExerciseId } from '../types/exercise';
+import type { Exercise, ExerciseId, ExerciseGroup } from '../types/exercise';
 
 export const EXERCISES: Record<ExerciseId, Exercise> = {
   bench_press:                { id: 'bench_press', name: 'Bench Press', group: 'G1', usesWeight: true, defaultSets: 3, trackingUnit: 'reps' },
@@ -21,16 +21,24 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
 
 export const EXERCISE_LIST = Object.values(EXERCISES);
 
-export const EXERCISE_GROUPS = {
-  G1: EXERCISE_LIST.filter(e => e.group === 'G1'),
-  G2: EXERCISE_LIST.filter(e => e.group === 'G2'),
-  G3: EXERCISE_LIST.filter(e => e.group === 'G3'),
-  G4: EXERCISE_LIST.filter(e => e.group === 'G4'),
+// Explicit group definitions — some exercises intentionally appear in multiple groups
+export const EXERCISE_GROUPS: Record<ExerciseGroup, ExerciseId[]> = {
+  G1: ['bench_press', 'squat', 'overhead_press'],
+  G2: ['shoulder_press_machine', 'romanian_dl', 'bench_press', 'barbell_row', 'squat', 'assisted_pull_ups'],
+  G3: ['lateral_raises', 'lat_pulldown', 'chest_fly_machine', 'leg_extension'],
+  G4: ['overhead_triceps_extension', 'incline_dumbbell_curl', 'crunch', 'leg_raises', 'plank'],
 };
 
-export const GROUP_LABELS: Record<string, string> = {
+export const GROUP_LABELS: Record<ExerciseGroup, string> = {
   G1: 'Ana Bileşik Hareketler',
   G2: 'İkincil Hareketler',
   G3: 'Aksesuar Hareketler',
   G4: 'İzolasyon & Core',
+};
+
+export const GROUP_COLORS: Record<ExerciseGroup, { bg: string; text: string; border: string; dot: string }> = {
+  G1: { bg: 'bg-red-500/15', text: 'text-red-400', border: 'border-red-500/30', dot: 'bg-red-400' },
+  G2: { bg: 'bg-yellow-500/15', text: 'text-yellow-400', border: 'border-yellow-500/30', dot: 'bg-yellow-400' },
+  G3: { bg: 'bg-blue-500/15', text: 'text-blue-400', border: 'border-blue-500/30', dot: 'bg-blue-400' },
+  G4: { bg: 'bg-green-500/15', text: 'text-green-400', border: 'border-green-500/30', dot: 'bg-green-400' },
 };

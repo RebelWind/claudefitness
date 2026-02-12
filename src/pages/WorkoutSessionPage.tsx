@@ -152,7 +152,7 @@ export default function WorkoutSessionPage() {
             <Card className="mb-4">
               <div className="flex justify-between items-start mb-1">
                 <h2 className="text-xl font-bold text-text">{exerciseInfo.name}</h2>
-                <Badge>{exerciseInfo.group}</Badge>
+                <Badge group={exerciseInfo.group}>{exerciseInfo.group}</Badge>
               </div>
               {exerciseInfo.usesWeight && (
                 <p className="text-primary-light font-semibold text-lg mb-4">
