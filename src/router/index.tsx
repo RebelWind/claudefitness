@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router';
 import App from '../App';
 import LoginPage from '../pages/LoginPage';
 import RegisterPage from '../pages/RegisterPage';
+import WelcomePage from '../pages/WelcomePage';
 import DashboardPage from '../pages/DashboardPage';
 import InitialSetupPage from '../pages/InitialSetupPage';
 import WorkoutSessionPage from '../pages/WorkoutSessionPage';
@@ -17,6 +18,10 @@ export const router = createBrowserRouter([
     errorElement: <NotFoundPage />,
     children: [
       { index: true, element: <Navigate to="/dashboard" replace /> },
+      {
+        path: 'welcome',
+        element: <ProtectedRoute><WelcomePage /></ProtectedRoute>,
+      },
       {
         path: 'dashboard',
         element: <ProtectedRoute><DashboardPage /></ProtectedRoute>,

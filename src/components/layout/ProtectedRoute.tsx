@@ -2,6 +2,8 @@ import { Navigate, useLocation } from 'react-router';
 import { useAuthStore } from '../../stores/authStore';
 import { useUserStore } from '../../stores/userStore';
 
+const SETUP_PATHS = ['/welcome', '/setup'];
+
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
   const isLoading = useAuthStore(s => s.isLoading);
@@ -23,8 +25,8 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     return <Navigate to="/login" replace />;
   }
 
-  if (user && !user.hasCompletedSetup && location.pathname !== '/setup') {
-    return <Navigate to="/setup" replace />;
+  if (user && !user.hasCompletedSetup && !SETUP_PATHS.includes(location.pathname)) {
+    return <Navigate to="/welcome" replace />;
   }
 
   return <>{children}</>;

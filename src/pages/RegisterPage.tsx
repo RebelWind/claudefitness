@@ -34,7 +34,7 @@ export default function RegisterPage() {
     if (errorMsg) {
       setError(errorMsg);
     } else {
-      navigate('/setup', { replace: true });
+      navigate('/welcome', { replace: true });
     }
   };
 
