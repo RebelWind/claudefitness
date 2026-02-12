@@ -1,67 +1,90 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { MOCK_CREDENTIALS, MOCK_USER, MOCK_BASELINES } from '../data/mock';
+import { supabase } from '../lib/supabase';
 import { useUserStore } from './userStore';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface AuthState {
-  token: string | null;
   userId: string | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => boolean;
-  register: (email: string, password: string, name: string) => boolean;
-  logout: () => void;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<string | null>;
+  register: (email: string, password: string, name: string) => Promise<string | null>;
+  logout: () => Promise<void>;
+  initialize: () => Promise<void>;
+  setFromSupabaseUser: (user: SupabaseUser | null) => void;
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
-      token: null,
-      userId: null,
-      isAuthenticated: false,
+export const useAuthStore = create<AuthState>()((set) => ({
+  userId: null,
+  isAuthenticated: false,
+  isLoading: true,
 
-      login: (email: string, password: string) => {
-        const cred = MOCK_CREDENTIALS.find(
-          c => c.email === email && c.password === password,
-        );
-        if (cred) {
-          set({
-            token: `mock-token-${cred.userId}`,
-            userId: cred.userId,
-            isAuthenticated: true,
-          });
-          // Load mock user data
-          const userStore = useUserStore.getState();
-          userStore.setUser(MOCK_USER);
-          userStore.setBaselines(MOCK_BASELINES);
-          return true;
-        }
-        return false;
-      },
-
-      register: (email: string, _password: string, name: string) => {
-        const newUserId = `user-${Date.now()}`;
-        set({
-          token: `mock-token-${newUserId}`,
-          userId: newUserId,
-          isAuthenticated: true,
-        });
-        const userStore = useUserStore.getState();
+  setFromSupabaseUser: (user) => {
+    if (user) {
+      set({ userId: user.id, isAuthenticated: true, isLoading: false });
+      // Sync user store
+      const userStore = useUserStore.getState();
+      if (!userStore.user || userStore.user.id !== user.id) {
         userStore.setUser({
-          id: newUserId,
-          email,
-          name,
-          createdAt: new Date().toISOString(),
-          hasCompletedSetup: false,
-          programStartDate: null,
+          id: user.id,
+          email: user.email || '',
+          name: user.user_metadata?.name || user.email?.split('@')[0] || '',
+          createdAt: user.created_at,
+          hasCompletedSetup: userStore.user?.hasCompletedSetup ?? false,
+          programStartDate: userStore.user?.programStartDate ?? null,
         });
-        return true;
-      },
+      }
+    } else {
+      set({ userId: null, isAuthenticated: false, isLoading: false });
+    }
+  },
 
-      logout: () => {
-        set({ token: null, userId: null, isAuthenticated: false });
-        useUserStore.getState().clear();
+  initialize: async () => {
+    set({ isLoading: true });
+    const { data: { session } } = await supabase.auth.getSession();
+    const setUser = useAuthStore.getState().setFromSupabaseUser;
+    setUser(session?.user ?? null);
+
+    supabase.auth.onAuthStateChange((_event, session) => {
+      const setUser = useAuthStore.getState().setFromSupabaseUser;
+      setUser(session?.user ?? null);
+    });
+  },
+
+  login: async (email, password) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) {
+      return error.message;
+    }
+    return null;
+  },
+
+  register: async (email, password, name) => {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { name },
       },
-    }),
-    { name: 'fitness-auth' },
-  ),
-);
+    });
+    if (error) {
+      return error.message;
+    }
+    // Set the new user as not having completed setup
+    const userStore = useUserStore.getState();
+    const currentUser = userStore.user;
+    if (currentUser) {
+      userStore.setUser({ ...currentUser, hasCompletedSetup: false, programStartDate: null });
+    }
+    return null;
+  },
+
+  logout: async () => {
+    await supabase.auth.signOut();
+    set({ userId: null, isAuthenticated: false });
+    useUserStore.getState().clear();
+  },
+}));

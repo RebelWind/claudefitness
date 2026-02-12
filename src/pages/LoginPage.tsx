@@ -10,8 +10,9 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -20,11 +21,14 @@ export default function LoginPage() {
       return;
     }
 
-    const success = login(email, password);
-    if (success) {
-      navigate('/dashboard', { replace: true });
+    setLoading(true);
+    const errorMsg = await login(email, password);
+    setLoading(false);
+
+    if (errorMsg) {
+      setError(errorMsg);
     } else {
-      setError('Geçersiz e-posta veya şifre.');
+      navigate('/dashboard', { replace: true });
     }
   };
 
@@ -59,8 +63,8 @@ export default function LoginPage() {
             <p className="text-sm text-error text-center">{error}</p>
           )}
 
-          <Button type="submit" fullWidth size="lg" className="mt-2">
-            Giriş Yap
+          <Button type="submit" fullWidth size="lg" className="mt-2" disabled={loading}>
+            {loading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
           </Button>
         </form>
 
@@ -70,12 +74,6 @@ export default function LoginPage() {
             Kayıt Ol
           </Link>
         </p>
-
-        <div className="mt-6 p-3 bg-surface rounded-xl border border-surface-light">
-          <p className="text-xs text-text-muted text-center">
-            Demo: demo@fitness.app / demo1234
-          </p>
-        </div>
       </div>
     </div>
   );

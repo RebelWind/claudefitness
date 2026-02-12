@@ -28,8 +28,8 @@ export default function ProfilePage() {
   const totalHours = Math.floor(totalDuration / 3600);
   const totalMins = Math.floor((totalDuration % 3600) / 60);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/login', { replace: true });
   };
 

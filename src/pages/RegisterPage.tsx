@@ -11,8 +11,9 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -26,11 +27,14 @@ export default function RegisterPage() {
       return;
     }
 
-    const success = register(email, password, name);
-    if (success) {
-      navigate('/setup', { replace: true });
+    setLoading(true);
+    const errorMsg = await register(email, password, name);
+    setLoading(false);
+
+    if (errorMsg) {
+      setError(errorMsg);
     } else {
-      setError('Kayıt başarısız oldu.');
+      navigate('/setup', { replace: true });
     }
   };
 
@@ -72,8 +76,8 @@ export default function RegisterPage() {
             <p className="text-sm text-error text-center">{error}</p>
           )}
 
-          <Button type="submit" fullWidth size="lg" className="mt-2">
-            Kayıt Ol
+          <Button type="submit" fullWidth size="lg" className="mt-2" disabled={loading}>
+            {loading ? 'Kayıt olunuyor...' : 'Kayıt Ol'}
           </Button>
         </form>
 

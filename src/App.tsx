@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router';
 import BottomNav from './components/layout/BottomNav';
 import { useAuthStore } from './stores/authStore';
@@ -5,10 +6,14 @@ import { useWorkoutStore } from './stores/workoutStore';
 
 export default function App() {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
+  const initialize = useAuthStore(s => s.initialize);
   const activeSession = useWorkoutStore(s => s.activeSession);
   const location = useLocation();
 
-  // Hide bottom nav on auth pages, setup, and during active workout
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
+
   const hideNav =
     !isAuthenticated ||
     location.pathname === '/setup' ||
