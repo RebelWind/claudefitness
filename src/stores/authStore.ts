@@ -128,7 +128,7 @@ async function restoreFromN8n(
           if (pe.set4 != null) allSets.push(pe.set4);
           return {
             exerciseId: exerciseIdFromSearchKey(pe.search_key) || 'bench_press' as any,
-            weightKg: typeof pe.kg === 'number' ? pe.kg : 0,
+            weightKg: typeof pe.kg === 'number' ? pe.kg : Number(pe.kg) || 0,
             sets: allSets.slice(0, setCount),
             completed: true,
             searchKey: pe.search_key,

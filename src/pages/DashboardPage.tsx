@@ -115,7 +115,8 @@ export default function DashboardPage() {
   const programKgMap = useMemo(() => {
     const map: Record<string, number> = {};
     for (const pe of workoutExercises) {
-      if (typeof pe.kg === 'number') map[pe.search_key] = pe.kg;
+      const kgNum = typeof pe.kg === 'number' ? pe.kg : Number(pe.kg) || 0;
+      if (kgNum > 0) map[pe.search_key] = kgNum;
     }
     return map;
   }, [workoutExercises]);
@@ -390,9 +391,9 @@ export default function DashboardPage() {
                       <span className="text-sm text-text">{pe.egzersiz_adi}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      {typeof pe.kg === 'number' && pe.kg > 0 && (
+                      {Number(pe.kg) > 0 && (
                         <span className="text-xs font-bold text-primary-light bg-primary/10 px-2 py-0.5 rounded">
-                          {pe.kg} kg
+                          {Number(pe.kg)} kg
                         </span>
                       )}
                       {pe.rpe !== null && (

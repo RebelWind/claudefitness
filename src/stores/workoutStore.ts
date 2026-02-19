@@ -46,7 +46,7 @@ export const useWorkoutStore = create<WorkoutState>()(
 
           return {
             exerciseId: exId || ('bench_press' as any),
-            weightKg: typeof pe.kg === 'number' ? pe.kg : 0,
+            weightKg: typeof pe.kg === 'number' ? pe.kg : Number(pe.kg) || 0,
             sets: Array(setCount).fill(0),
             completed: false,
             searchKey: pe.search_key,
