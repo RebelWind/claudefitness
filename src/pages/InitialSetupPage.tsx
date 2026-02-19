@@ -5,7 +5,8 @@ import { useProgramStore } from '../stores/programStore';
 import { EXERCISE_GROUPS, GROUP_LABELS, GROUP_COLORS, EXERCISES, SETUP_SKIP_EXERCISES } from '../constants/exercises';
 import { getExcelMapping } from '../constants/exerciseMapping';
 import { insertBaslangic, getBaslangicDetails } from '../lib/n8nService';
-import type { BaslangicInput, BaslangicDetailRow } from '../lib/n8nService';
+import type { BaslangicInput, BaslangicDetailsResponse } from '../lib/n8nService';
+import { EXERCISE_EXCEL_MAPPING } from '../constants/exerciseMapping';
 import { getUserProgram } from '../lib/programService';
 import { supabase } from '../lib/supabase';
 import type { ExerciseId, ExerciseGroup } from '../types/exercise';
@@ -120,20 +121,45 @@ export default function InitialSetupPage() {
 
   const verifyBaslangic = (
     sentInputs: BaslangicInput[],
-    remoteRows: BaslangicDetailRow[],
+    enteredBodyWeight: number,
+    remote: BaslangicDetailsResponse,
   ): string[] => {
-    const remoteMap = new Map(remoteRows.map(r => [r.search_key, r]));
     const mismatches: string[] = [];
 
+    // Verify body weight
+    if (remote.Kullanici_Bilgileri.Vucut_Agirligi !== enteredBodyWeight) {
+      mismatches.push(
+        `Vücut Ağırlığı: Girilen ${enteredBodyWeight}kg → Excel'de ${remote.Kullanici_Bilgileri.Vucut_Agirligi}kg`,
+      );
+    }
+
+    // Build lookup: "G1|Bench Press" → Baslangic_Agirligi
+    const remoteMap = new Map<string, number | string>();
+    for (const grup of remote.Program_Detayi) {
+      for (const ex of grup.Egzersizler) {
+        remoteMap.set(`${grup.Grup_Adi}|${ex.Egzersiz_Adi}`, ex.Baslangic_Agirligi);
+      }
+    }
+
+    // Compare each sent exercise
     for (const sent of sentInputs) {
-      const remote = remoteMap.get(sent.search_key);
-      if (!remote) {
-        mismatches.push(`${sent.search_key}: Excel'de bulunamadı`);
+      const mapping = EXERCISE_EXCEL_MAPPING.find(m => m.search_key === sent.search_key);
+      if (!mapping) continue;
+
+      const lookupKey = `${mapping.grup}|${mapping.egzersiz_adi}`;
+      const remoteWeight = remoteMap.get(lookupKey);
+
+      if (remoteWeight === undefined) {
+        mismatches.push(`${mapping.egzersiz_adi} (${mapping.grup}): Excel'de bulunamadı`);
         continue;
       }
-      if (remote.agirlik !== sent.girilen_agirlik || remote.tekrar !== sent.girilen_tekrar) {
+
+      // Skip bodyweight exercises ("vücut a.")
+      if (typeof remoteWeight === 'string') continue;
+
+      if (remoteWeight !== sent.girilen_agirlik) {
         mismatches.push(
-          `${sent.search_key}: Girilen ${sent.girilen_agirlik}kg/${sent.girilen_tekrar}rep → Excel'de ${remote.agirlik}kg/${remote.tekrar}rep`,
+          `${mapping.egzersiz_adi} (${mapping.grup}): Girilen ${sent.girilen_agirlik}kg → Excel'de ${remoteWeight}kg`,
         );
       }
     }
@@ -164,8 +190,8 @@ export default function InitialSetupPage() {
 
         if (result) {
           setStatusMsg('Veriler doğrulanıyor...');
-          const remoteRows = await getBaslangicDetails(result.googleFileId);
-          const mismatches = verifyBaslangic(result.sentInputs, remoteRows);
+          const remoteData = await getBaslangicDetails(result.googleFileId);
+          const mismatches = verifyBaslangic(result.sentInputs, Number(bodyWeight), remoteData);
 
           if (mismatches.length > 0) {
             setVerifyError(mismatches);

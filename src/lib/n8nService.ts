@@ -75,15 +75,27 @@ export interface BaslangicInput {
   excel_satir_no: number;
 }
 
-export interface BaslangicDetailRow {
-  search_key: string;
-  agirlik: number;
-  tekrar: number;
+export interface BaslangicEgzersiz {
+  Egzersiz_Adi: string;
+  Set_Tekrar: string;
+  Baslangic_Agirligi: number | string;
+  Haftalik_Artis: number;
+  RPE: number | string;
+}
+
+export interface BaslangicGrup {
+  Grup_Adi: string;
+  Egzersizler: BaslangicEgzersiz[];
+}
+
+export interface BaslangicDetailsResponse {
+  Kullanici_Bilgileri: { Vucut_Agirligi: number };
+  Program_Detayi: BaslangicGrup[];
 }
 
 export async function getBaslangicDetails(
   googleFileId: string,
-): Promise<BaslangicDetailRow[]> {
+): Promise<BaslangicDetailsResponse> {
   const response = await fetch(N8N_WEBHOOK_URL, {
     method: 'POST',
     headers: {
@@ -100,7 +112,9 @@ export async function getBaslangicDetails(
     throw new Error(`getBaslangicDetails webhook hatası: ${response.status}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  // Response is wrapped in an array — unwrap first element
+  return Array.isArray(data) ? data[0] : data;
 }
 
 export async function insertBaslangic(
