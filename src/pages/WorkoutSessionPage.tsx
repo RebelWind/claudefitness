@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useWorkoutStore } from '../stores/workoutStore';
 import { useProgramStore } from '../stores/programStore';
+import { useProgramDetailsStore } from '../stores/programDetailsStore';
+import { insertProgram } from '../lib/n8nService';
+import type { ProgramInput } from '../lib/n8nService';
 import { EXERCISES } from '../constants/exercises';
 import type { ExerciseLog } from '../types/workout';
 import Header from '../components/layout/Header';
@@ -51,9 +54,12 @@ export default function WorkoutSessionPage() {
   const abandonWorkout = useWorkoutStore(s => s.abandonWorkout);
   const markWorkoutComplete = useProgramStore(s => s.markWorkoutComplete);
 
+  const googleFileId = useProgramDetailsStore(s => s.googleFileId);
+
   const [showRest, setShowRest] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const handleRestComplete = useCallback(() => {
     setShowRest(false);
@@ -83,14 +89,46 @@ export default function WorkoutSessionPage() {
     }
   };
 
-  const handleNextExercise = () => {
+  const handleNextExercise = async () => {
     completeExercise(activeSession.currentExerciseIndex);
     if (isLastExercise) {
-      // Complete the workout
+      // Build inputs payload from all exercises
+      const inputs: ProgramInput[] = activeSession.exercises.map(ex => {
+        const input: ProgramInput = {
+          search_key: ex.searchKey || '',
+          set1: ex.sets[0] || 0,
+          set2: ex.sets[1] || 0,
+          set3: ex.sets[2] || 0,
+          excel_satir_no: ex.excelSatirNo || 0,
+        };
+        // 4-set exercises (bench, squat, overhead, barbell row)
+        if (ex.sets.length >= 4) {
+          input.set4 = ex.sets[3] || 0;
+        }
+        return input;
+      });
+
+      // Complete the workout locally
       const logId = `log-${Date.now()}`;
       completeWorkout();
       markWorkoutComplete(activeSession.weekNumber, activeSession.dayInWeek, logId);
       setShowSummary(true);
+
+      // Send to n8n in background (don't block UI)
+      if (googleFileId) {
+        setIsSyncing(true);
+        try {
+          await insertProgram(
+            googleFileId,
+            `Hafta ${activeSession.weekNumber}`,
+            inputs,
+          );
+        } catch (err) {
+          console.error('Excel güncelleme hatası:', err);
+        } finally {
+          setIsSyncing(false);
+        }
+      }
     } else {
       nextExercise();
     }
@@ -261,6 +299,11 @@ export default function WorkoutSessionPage() {
           <p className="text-text-muted mb-4">
             Workout {workoutType} tamamlandı.
           </p>
+          {isSyncing && (
+            <p className="text-xs text-primary-light animate-pulse mb-3">
+              Veriler Excel'e kaydediliyor...
+            </p>
+          )}
           <Button
             fullWidth
             onClick={() => navigate('/dashboard', { replace: true })}

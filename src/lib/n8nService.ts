@@ -122,6 +122,7 @@ export interface ProgramExercise {
   rpe: number | null;
   isinma_setleri: number[] | null;
   search_key: string;
+  excel_satir_no: number;
 }
 
 export async function getProgramDetails(
@@ -146,6 +147,39 @@ export async function getProgramDetails(
   }
 
   return response.json();
+}
+
+export interface ProgramInput {
+  search_key: string;
+  set1: number;
+  set2: number;
+  set3: number;
+  set4?: number;
+  excel_satir_no: number;
+}
+
+export async function insertProgram(
+  googleFileId: string,
+  hafta: string,
+  inputs: ProgramInput[],
+): Promise<void> {
+  const response = await fetch(N8N_WEBHOOK_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${N8N_WEBHOOK_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      action: 'insertProgram',
+      google_file_id: googleFileId,
+      hafta,
+      inputs,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`insertProgram webhook hatası: ${response.status}`);
+  }
 }
 
 export async function insertBaslangic(

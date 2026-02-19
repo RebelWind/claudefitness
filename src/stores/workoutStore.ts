@@ -53,6 +53,7 @@ export const useWorkoutStore = create<WorkoutState>()(
             targetSetsTekrar: pe.set_x_tekrar,
             rpe: pe.rpe,
             warmupSets: pe.isinma_setleri,
+            excelSatirNo: pe.excel_satir_no,
           };
         });
 
