@@ -80,9 +80,10 @@ export const useProgramDetailsStore = create<ProgramDetailsState>()(
     }),
     {
       name: 'fitness-program-details',
+      version: 2,
+      migrate: () => ({ googleFileId: null }),
       partialize: (state) => ({
         googleFileId: state.googleFileId,
-        weeklyPrograms: state.weeklyPrograms,
       }),
     },
   ),

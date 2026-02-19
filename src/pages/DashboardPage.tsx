@@ -8,6 +8,7 @@ import { getCurrentWeek, getCompletedWorkoutCount, getWeekCompletionCount, getWe
 import { insertProgram } from '../lib/n8nService';
 import type { ProgramInput } from '../lib/n8nService';
 import { EXERCISE_EXCEL_ROWS } from '../constants/exerciseRows';
+import { exerciseIdFromSearchKey } from '../constants/exerciseMapping';
 import { saveWorkoutLog } from '../lib/supabaseSync';
 import type { WorkoutType } from '../types/exercise';
 import Header from '../components/layout/Header';
@@ -23,6 +24,7 @@ const DAY_MAP: Record<WorkoutType, 1 | 2 | 3> = { A: 1, B: 2, C: 3 };
 export default function DashboardPage() {
   const navigate = useNavigate();
   const user = useUserStore(s => s.user);
+  const baselines = useUserStore(s => s.baselines);
   const logs = useWorkoutStore(s => s.logs);
   const startWorkoutFromProgram = useWorkoutStore(s => s.startWorkoutFromProgram);
   const activeSession = useWorkoutStore(s => s.activeSession);
@@ -111,15 +113,24 @@ export default function DashboardPage() {
     return map;
   }, [completedLog]);
 
-  // Map search_key → kg from program data (fallback for old logs with weightKg=0)
+  // Map search_key → kg from program data, with baseline fallback
   const programKgMap = useMemo(() => {
     const map: Record<string, number> = {};
     for (const pe of workoutExercises) {
       const kgNum = typeof pe.kg === 'number' ? pe.kg : Number(pe.kg) || 0;
-      if (kgNum > 0) map[pe.search_key] = kgNum;
+      if (kgNum > 0) {
+        map[pe.search_key] = kgNum;
+      } else {
+        // Fallback: use baseline kg when Excel returns 0/empty
+        const exId = exerciseIdFromSearchKey(pe.search_key);
+        if (exId) {
+          const bl = baselines.find(b => b.exerciseId === exId);
+          if (bl && bl.initialWeightKg > 0) map[pe.search_key] = bl.initialWeightKg;
+        }
+      }
     }
     return map;
-  }, [workoutExercises]);
+  }, [workoutExercises, baselines]);
 
   // Reset edit mode when switching workout/week
   useEffect(() => {
