@@ -132,6 +132,19 @@ export default function DashboardPage() {
     return map;
   }, [workoutExercises, baselines]);
 
+  // Heal old logs where weightKg was stored as 0 (pre-fix data)
+  const healLogWeights = useWorkoutStore(s => s.healLogWeights);
+  useEffect(() => {
+    if (!completedLog || Object.keys(programKgMap).length === 0) return;
+    const hasZeroKg = completedLog.exercises.some(ex => ex.weightKg === 0 && ex.searchKey && programKgMap[ex.searchKey] > 0);
+    if (!hasZeroKg) return;
+
+    const patched = healLogWeights(completedLog.id, programKgMap);
+    if (patched && user?.id) {
+      saveWorkoutLog(user.id, patched).catch(() => {});
+    }
+  }, [completedLog, programKgMap, healLogWeights, user?.id]);
+
   // Reset edit mode when switching workout/week
   useEffect(() => {
     setEditMode(false);
@@ -172,6 +185,11 @@ export default function DashboardPage() {
       });
 
       await insertProgram(googleFileId, `Hafta ${selectedWeek}`, inputs);
+
+      // Clear program cache so next fetch picks up recalculated kg from Excel
+      useProgramDetailsStore.setState(s => ({
+        weeklyPrograms: { ...s.weeklyPrograms, [selectedWeek]: undefined as any },
+      }));
 
       // Update local log
       for (const [key, sets] of Object.entries(editSets)) {

@@ -4,6 +4,7 @@ import type { WorkoutType } from '../types/exercise';
 import type { ActiveWorkoutSession, WorkoutLog, ExerciseLog } from '../types/workout';
 import type { ProgramExercise } from '../lib/n8nService';
 import { exerciseIdFromSearchKey } from '../constants/exerciseMapping';
+import { useUserStore } from './userStore';
 
 /** Parse "4x5+" → 4, "3x10" → 3, "3xmax" → 3 */
 function parseSetCount(setxTekrar: string): number {
@@ -28,6 +29,8 @@ interface WorkoutState {
   abandonWorkout: () => void;
   setLogs: (logs: WorkoutLog[]) => void;
   updateLogSets: (logId: string, searchKey: string, sets: number[]) => void;
+  /** Patch weightKg=0 exercises in a specific log using a search_key→kg map. Returns patched log or null. */
+  healLogWeights: (logId: string, kgMap: Record<string, number>) => WorkoutLog | null;
 }
 
 export const useWorkoutStore = create<WorkoutState>()(
@@ -121,7 +124,7 @@ export const useWorkoutStore = create<WorkoutState>()(
 
         const log: WorkoutLog = {
           id: `log-${Date.now()}`,
-          userId: 'current-user',
+          userId: useUserStore.getState().user?.id || 'current-user',
           weekNumber: session.weekNumber,
           workoutType: session.workoutType,
           dayInWeek: session.dayInWeek,
@@ -143,6 +146,26 @@ export const useWorkoutStore = create<WorkoutState>()(
       },
 
       setLogs: (logs) => set({ logs }),
+
+      healLogWeights: (logId, kgMap) => {
+        let patched: WorkoutLog | null = null;
+        const logs = get().logs.map(log => {
+          if (log.id !== logId) return log;
+          const needsHeal = log.exercises.some(ex => ex.weightKg === 0 && ex.searchKey && kgMap[ex.searchKey] > 0);
+          if (!needsHeal) return log;
+          patched = {
+            ...log,
+            exercises: log.exercises.map(ex => {
+              if (ex.weightKg > 0 || !ex.searchKey) return ex;
+              const kg = kgMap[ex.searchKey];
+              return kg > 0 ? { ...ex, weightKg: kg } : ex;
+            }),
+          };
+          return patched;
+        });
+        if (patched) set({ logs });
+        return patched;
+      },
 
       updateLogSets: (logId, searchKey, newSets) => {
         const logs = get().logs.map(log => {
