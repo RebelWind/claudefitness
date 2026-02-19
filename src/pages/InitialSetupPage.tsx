@@ -151,9 +151,9 @@ export default function InitialSetupPage() {
         continue;
       }
 
-      if (remoteInput['baslangic agirliklari'] !== sent.girilen_agirlik) {
+      if (remoteInput.agirlik !== sent.girilen_agirlik) {
         mismatches.push(
-          `${label}: Girilen ${sent.girilen_agirlik}kg → Excel'de ${remoteInput['baslangic agirliklari']}kg`,
+          `${label}: Girilen ${sent.girilen_agirlik}kg → Excel'de ${remoteInput.agirlik}kg`,
         );
       }
     }
