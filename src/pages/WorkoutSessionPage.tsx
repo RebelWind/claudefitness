@@ -72,7 +72,7 @@ export default function WorkoutSessionPage() {
     }
   }, [activeSession, navigate, showSummary]);
 
-  if (!activeSession) return null;
+  if (!activeSession && !showSummary) return null;
 
   const currentExercise: ExerciseLog = activeSession.exercises[activeSession.currentExerciseIndex];
   const exerciseInfo = EXERCISES[currentExercise.exerciseId];
@@ -110,10 +110,7 @@ export default function WorkoutSessionPage() {
         return input;
       });
 
-      // Complete the workout locally
-      const logId = `log-${Date.now()}`;
-      completeWorkout();
-      markWorkoutComplete(activeSession.weekNumber, activeSession.dayInWeek, logId);
+      // Show summary FIRST (activeSession is still alive)
       setShowSummary(true);
 
       // Send to n8n in background (don't block UI)
@@ -134,6 +131,15 @@ export default function WorkoutSessionPage() {
     } else {
       nextExercise();
     }
+  };
+
+  /** Called when user dismisses the summary modal */
+  const handleSummaryClose = () => {
+    // Now it's safe to clear the session
+    const logId = `log-${Date.now()}`;
+    completeWorkout();
+    markWorkoutComplete(activeSession.weekNumber, activeSession.dayInWeek, logId);
+    navigate('/dashboard', { replace: true });
   };
 
   const handleQuit = () => {
@@ -294,7 +300,7 @@ export default function WorkoutSessionPage() {
       </div>
 
       {/* Summary Modal */}
-      <Modal open={showSummary} onClose={() => navigate('/dashboard', { replace: true })} title="Antrenman Tamamlandı!">
+      <Modal open={showSummary} onClose={handleSummaryClose} title="Antrenman Tamamlandı!">
         <div className="text-center py-4">
           <div className="text-5xl mb-4">&#128170;</div>
           <h3 className="text-lg font-bold text-text mb-2">Harika!</h3>
@@ -308,7 +314,7 @@ export default function WorkoutSessionPage() {
           )}
           <Button
             fullWidth
-            onClick={() => navigate('/dashboard', { replace: true })}
+            onClick={handleSummaryClose}
           >
             Ana Sayfaya Dön
           </Button>
