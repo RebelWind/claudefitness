@@ -255,6 +255,11 @@ export default function WorkoutSessionPage() {
 
               {/* Target info from Excel */}
               <div className="flex items-center gap-3 mb-3">
+                {currentExercise.weightKg > 0 && (
+                  <span className="text-lg font-bold text-text">
+                    {currentExercise.weightKg} kg
+                  </span>
+                )}
                 {currentExercise.targetSetsTekrar && (
                   <span className="text-primary-light font-semibold text-lg">
                     {currentExercise.targetSetsTekrar}
