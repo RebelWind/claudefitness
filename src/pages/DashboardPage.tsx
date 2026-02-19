@@ -305,38 +305,40 @@ export default function DashboardPage() {
             <p className="text-sm text-error text-center py-2">{error}</p>
           )}
 
-          {workoutExercises.length > 0 && (
+          {/* Completed workout → render from log (has kg, sets, etc.) */}
+          {isWorkoutDone && completedLog && completedLog.exercises.length > 0 && (
             <div className="flex flex-col gap-1 mb-4">
-              {workoutExercises.map(pe => {
-                const loggedSets = loggedSetsMap[pe.search_key];
-                const editingSets = editSets[pe.search_key];
-
+              {completedLog.exercises.map((ex, idx) => {
+                const editingSets = editSets[ex.searchKey || ''];
                 return (
-                  <div key={pe.search_key} className="py-2">
-                    {/* Exercise header row */}
+                  <div key={ex.searchKey || idx} className="py-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className={`w-1.5 h-1.5 rounded-full ${loggedSets ? 'bg-success' : 'bg-primary-light'}`} />
-                        <span className="text-sm text-text">{pe.egzersiz_adi}</span>
+                        <div className="w-1.5 h-1.5 rounded-full bg-success" />
+                        <span className="text-sm text-text">{ex.exerciseName || ex.exerciseId}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-semibold text-primary-light bg-primary/10 px-1.5 py-0.5 rounded">
-                          {typeof pe.kg === 'number' ? `${pe.kg} kg` : pe.kg}
-                        </span>
-                        {pe.rpe !== null && (
-                          <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full font-semibold">
-                            RPE {pe.rpe}
+                        {ex.weightKg > 0 && (
+                          <span className="text-[10px] font-semibold text-primary-light bg-primary/10 px-1.5 py-0.5 rounded">
+                            {ex.weightKg} kg
                           </span>
                         )}
-                        <span className="text-xs text-text-muted font-medium">{pe.set_x_tekrar}</span>
+                        {ex.rpe != null && (
+                          <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full font-semibold">
+                            RPE {ex.rpe}
+                          </span>
+                        )}
+                        {ex.targetSetsTekrar && (
+                          <span className="text-xs text-text-muted font-medium">{ex.targetSetsTekrar}</span>
+                        )}
                       </div>
                     </div>
 
-                    {/* Logged sets display (when workout is done and NOT editing) */}
-                    {loggedSets && !editMode && (
+                    {/* Logged sets (not editing) */}
+                    {!editMode && (
                       <div className="flex items-center gap-1.5 mt-1 ml-3.5">
                         <span className="text-[10px] text-text-muted">Tekrar:</span>
-                        {loggedSets.map((reps, i) => (
+                        {ex.sets.map((reps, i) => (
                           <span key={i} className="text-xs font-semibold text-success bg-success/10 px-1.5 py-0.5 rounded">
                             {reps}
                           </span>
@@ -344,7 +346,7 @@ export default function DashboardPage() {
                       </div>
                     )}
 
-                    {/* Editable sets (when in edit mode) */}
+                    {/* Editable sets */}
                     {editMode && editingSets && (
                       <div className="flex items-center gap-1.5 mt-1.5 ml-3.5">
                         <span className="text-[10px] text-text-muted">Set:</span>
@@ -354,7 +356,7 @@ export default function DashboardPage() {
                             type="number"
                             inputMode="numeric"
                             value={reps || ''}
-                            onChange={e => handleEditSetValue(pe.search_key, i, parseInt(e.target.value) || 0)}
+                            onChange={e => handleEditSetValue(ex.searchKey || '', i, parseInt(e.target.value) || 0)}
                             className="w-12 h-7 text-center text-xs font-bold rounded-lg bg-background
                               border border-surface-light text-text focus:outline-none focus:border-primary-light"
                           />
@@ -364,6 +366,35 @@ export default function DashboardPage() {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Upcoming workout → render from n8n program data */}
+          {!isWorkoutDone && workoutExercises.length > 0 && (
+            <div className="flex flex-col gap-1 mb-4">
+              {workoutExercises.map(pe => (
+                <div key={pe.search_key} className="py-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary-light" />
+                      <span className="text-sm text-text">{pe.egzersiz_adi}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {typeof pe.kg === 'number' && pe.kg > 0 && (
+                        <span className="text-[10px] font-semibold text-primary-light bg-primary/10 px-1.5 py-0.5 rounded">
+                          {pe.kg} kg
+                        </span>
+                      )}
+                      {pe.rpe !== null && (
+                        <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full font-semibold">
+                          RPE {pe.rpe}
+                        </span>
+                      )}
+                      <span className="text-xs text-text-muted font-medium">{pe.set_x_tekrar}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 

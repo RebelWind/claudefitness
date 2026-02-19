@@ -356,15 +356,47 @@ export default function WorkoutSessionPage() {
 
       {/* Summary Modal */}
       <Modal open={showSummary} onClose={handleSummaryClose} title="Antrenman Tamamlandı!">
-        <div className="text-center py-4">
-          <div className="text-5xl mb-4">&#128170;</div>
-          <h3 className="text-lg font-bold text-text mb-2">Harika!</h3>
-          <p className="text-text-muted mb-4">
-            Workout {workoutType} tamamlandı.
-          </p>
+        <div className="py-4">
+          <div className="text-center">
+            <div className="text-5xl mb-3">&#128170;</div>
+            <h3 className="text-lg font-bold text-text mb-1">Harika!</h3>
+            <p className="text-text-muted text-sm mb-4">
+              Workout {workoutType} - Hafta {activeSession?.weekNumber}
+            </p>
+          </div>
+
+          {/* Exercise summary with kg + sets */}
+          {activeSession && (
+            <div className="flex flex-col gap-2 mb-4 max-h-64 overflow-y-auto">
+              {activeSession.exercises.map((ex, idx) => (
+                <div key={idx} className="flex items-center justify-between bg-surface rounded-xl px-3 py-2">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm text-text truncate block">
+                      {ex.exerciseName || ex.exerciseId}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 ml-2 shrink-0">
+                    {ex.weightKg > 0 && (
+                      <span className="text-[10px] font-semibold text-primary-light bg-primary/10 px-1.5 py-0.5 rounded">
+                        {ex.weightKg} kg
+                      </span>
+                    )}
+                    <div className="flex gap-1">
+                      {ex.sets.map((reps, i) => (
+                        <span key={i} className="text-xs font-bold text-success bg-success/10 px-1.5 py-0.5 rounded">
+                          {reps}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {isSyncing && (
-            <p className="text-xs text-primary-light animate-pulse mb-3">
-              Veriler Excel'e kaydediliyor...
+            <p className="text-xs text-primary-light animate-pulse mb-3 text-center">
+              Veriler kaydediliyor...
             </p>
           )}
           <Button
