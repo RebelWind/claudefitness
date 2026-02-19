@@ -67,3 +67,34 @@ export function generateProgramKey(): string {
   }
   return key;
 }
+
+export interface BaslangicInput {
+  search_key: string;
+  girilen_agirlik: number;
+  girilen_tekrar: number;
+  excel_satir_no: number;
+}
+
+export async function insertBaslangic(
+  googleFileId: string,
+  kilo: number,
+  inputs: BaslangicInput[],
+): Promise<void> {
+  const response = await fetch(N8N_WEBHOOK_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${N8N_WEBHOOK_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      action: 'insertBaslangic',
+      kilo,
+      google_file_id: googleFileId,
+      inputs,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`insertBaslangic webhook hatası: ${response.status}`);
+  }
+}

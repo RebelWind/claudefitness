@@ -3,6 +3,11 @@ import { useNavigate } from 'react-router';
 import { useUserStore } from '../stores/userStore';
 import { useProgramStore } from '../stores/programStore';
 import { EXERCISE_GROUPS, GROUP_LABELS, GROUP_COLORS, EXERCISES } from '../constants/exercises';
+import { getExcelMapping } from '../constants/exerciseMapping';
+import { insertBaslangic } from '../lib/n8nService';
+import type { BaslangicInput } from '../lib/n8nService';
+import { getUserProgram } from '../lib/programService';
+import { supabase } from '../lib/supabase';
 import type { ExerciseId, ExerciseGroup } from '../types/exercise';
 import Header from '../components/layout/Header';
 import PageContainer from '../components/layout/PageContainer';
@@ -23,6 +28,9 @@ export default function InitialSetupPage() {
   const completeSetup = useUserStore(s => s.completeSetup);
   const initializeProgram = useProgramStore(s => s.initializeProgram);
   const [currentGroupIdx, setCurrentGroupIdx] = useState(0);
+  const [bodyWeight, setBodyWeight] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [statusMsg, setStatusMsg] = useState('');
 
   // Key inputs by "groupKey-exerciseId" to handle duplicates across groups
   const [inputs, setInputs] = useState<Record<string, ExerciseInput>>(() => {
@@ -41,10 +49,10 @@ export default function InitialSetupPage() {
   const colors = GROUP_COLORS[currentGroup];
   const progress = ((currentGroupIdx) / groupKeys.length) * 100;
 
-  const inputKey = (exId: ExerciseId) => `${currentGroup}-${exId}`;
+  const inputKey = (group: ExerciseGroup, exId: ExerciseId) => `${group}-${exId}`;
 
   const updateInput = (exId: ExerciseId, field: 'weight' | 'reps', value: string) => {
-    const key = inputKey(exId);
+    const key = inputKey(currentGroup, exId);
     setInputs(prev => ({
       ...prev,
       [key]: { ...prev[key], [field]: value },
@@ -52,18 +60,59 @@ export default function InitialSetupPage() {
   };
 
   const isCurrentGroupValid = () => {
+    // Body weight required on first step
+    if (currentGroupIdx === 0 && (!bodyWeight || Number(bodyWeight) <= 0)) return false;
+
     return exerciseIds.every(exId => {
       const ex = EXERCISES[exId];
-      const input = inputs[inputKey(exId)];
+      const input = inputs[inputKey(currentGroup, exId)];
       if (ex.usesWeight && (!input.weight || Number(input.weight) <= 0)) return false;
       if (!input.reps || Number(input.reps) <= 0) return false;
       return true;
     });
   };
 
-  const handleNext = () => {
+  const sendToN8n = async () => {
+    // Get google_file_id from Supabase
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    if (!userId) return;
+
+    const program = await getUserProgram(userId);
+    if (!program?.google_file_id) {
+      console.warn('google_file_id bulunamadı, insertBaslangic atlanamıyor.');
+      return;
+    }
+
+    // Build inputs array from all groups
+    const baslangicInputs: BaslangicInput[] = [];
+
+    for (const group of groupKeys) {
+      for (const exId of EXERCISE_GROUPS[group]) {
+        const mapping = getExcelMapping(group, exId);
+        if (!mapping) continue;
+
+        const input = inputs[inputKey(group, exId)];
+        baslangicInputs.push({
+          search_key: mapping.search_key,
+          girilen_agirlik: Number(input.weight) || 0,
+          girilen_tekrar: Number(input.reps) || 0,
+          excel_satir_no: mapping.excel_satir_no,
+        });
+      }
+    }
+
+    await insertBaslangic(
+      program.google_file_id,
+      Number(bodyWeight),
+      baslangicInputs,
+    );
+  };
+
+  const handleNext = async () => {
+    // Save baselines for current group
     exerciseIds.forEach(exId => {
-      const input = inputs[inputKey(exId)];
+      const input = inputs[inputKey(currentGroup, exId)];
       updateBaseline(
         exId,
         Number(input.weight) || 0,
@@ -74,6 +123,17 @@ export default function InitialSetupPage() {
     if (currentGroupIdx < groupKeys.length - 1) {
       setCurrentGroupIdx(prev => prev + 1);
     } else {
+      // All groups done — send to n8n, then complete
+      setSubmitting(true);
+      try {
+        setStatusMsg('Veriler Excel\'e gönderiliyor...');
+        await sendToN8n();
+      } catch (err) {
+        console.error('insertBaslangic hatası:', err);
+      }
+
+      setStatusMsg('');
+      setSubmitting(false);
       completeSetup();
       initializeProgram(new Date().toISOString());
       navigate('/dashboard', { replace: true });
@@ -119,10 +179,29 @@ export default function InitialSetupPage() {
           {currentGroup === 'G4' && ' (Plank için saniye cinsinden girin)'}
         </p>
 
+        {/* Body weight input — shown on first step */}
+        {currentGroupIdx === 0 && (
+          <div className="bg-surface rounded-2xl border border-primary/30 p-4 mb-3">
+            <h3 className="font-semibold text-text mb-2">Vücut Ağırlığınız</h3>
+            <div className="flex-1">
+              <label className="text-xs text-text-muted block mb-1">Kilo (kg)</label>
+              <input
+                type="number"
+                inputMode="decimal"
+                placeholder="0"
+                value={bodyWeight}
+                onChange={e => setBodyWeight(e.target.value)}
+                className="w-full h-11 px-3 bg-background border border-primary/30 rounded-xl
+                  text-text text-center text-lg font-semibold focus:outline-none focus:border-primary-light"
+              />
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col gap-3">
           {exerciseIds.map(exId => {
             const ex = EXERCISES[exId];
-            const input = inputs[inputKey(exId)];
+            const input = inputs[inputKey(currentGroup, exId)];
             return (
               <div
                 key={exId}
@@ -169,6 +248,10 @@ export default function InitialSetupPage() {
           })}
         </div>
 
+        {statusMsg && (
+          <p className="text-sm text-primary-light text-center animate-pulse mt-4">{statusMsg}</p>
+        )}
+
         <div className="flex gap-3 mt-6 mb-4">
           {currentGroupIdx > 0 && (
             <Button variant="secondary" onClick={handleBack} className="flex-1">
@@ -177,10 +260,10 @@ export default function InitialSetupPage() {
           )}
           <Button
             onClick={handleNext}
-            disabled={!isCurrentGroupValid()}
+            disabled={!isCurrentGroupValid() || submitting}
             className="flex-1"
           >
-            {isLastGroup ? 'Programa Başla' : 'Devam'}
+            {submitting ? 'Gönderiliyor...' : isLastGroup ? 'Programa Başla' : 'Devam'}
           </Button>
         </div>
       </PageContainer>
