@@ -7,6 +7,8 @@ import { insertProgram } from '../lib/n8nService';
 import type { ProgramInput } from '../lib/n8nService';
 import { EXERCISES } from '../constants/exercises';
 import { EXERCISE_EXCEL_ROWS } from '../constants/exerciseRows';
+import { saveWorkoutLog } from '../lib/supabaseSync';
+import { useUserStore } from '../stores/userStore';
 import type { ExerciseLog } from '../types/workout';
 import Header from '../components/layout/Header';
 import Button from '../components/ui/Button';
@@ -168,9 +170,23 @@ export default function WorkoutSessionPage() {
   /** Called when user dismisses the summary modal */
   const handleSummaryClose = () => {
     // Now it's safe to clear the session
-    const logId = `log-${Date.now()}`;
     completeWorkout();
-    markWorkoutComplete(activeSession.weekNumber, activeSession.dayInWeek, logId);
+
+    // Get the newly created log from store
+    const logs = useWorkoutStore.getState().logs;
+    const completedLog = logs[logs.length - 1];
+    if (completedLog) {
+      markWorkoutComplete(activeSession.weekNumber, activeSession.dayInWeek, completedLog.id);
+
+      // Save to Supabase in background
+      const userId = useUserStore.getState().user?.id;
+      if (userId) {
+        saveWorkoutLog(userId, completedLog).catch(() => {
+          // Non-critical — log is in localStorage + Google Sheets
+        });
+      }
+    }
+
     navigate('/dashboard', { replace: true });
   };
 

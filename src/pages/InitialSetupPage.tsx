@@ -8,6 +8,7 @@ import { insertBaslangic, getBaslangicDetails } from '../lib/n8nService';
 import type { BaslangicInput, BaslangicDetailsResponse, BaslangicDetailInput } from '../lib/n8nService';
 import { EXERCISE_EXCEL_MAPPING } from '../constants/exerciseMapping';
 import { getUserProgram } from '../lib/programService';
+import { saveBaselines } from '../lib/supabaseSync';
 import { supabase } from '../lib/supabase';
 import type { ExerciseId, ExerciseGroup } from '../types/exercise';
 import Header from '../components/layout/Header';
@@ -221,9 +222,22 @@ export default function InitialSetupPage() {
 
   const isLastGroup = currentGroupIdx === groupKeys.length - 1;
 
-  const handleCompleteSummary = () => {
+  const handleCompleteSummary = async () => {
     completeSetup();
     initializeProgram(new Date().toISOString());
+
+    // Save baselines to Supabase for fast restore
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (userId) {
+        const baselines = useUserStore.getState().baselines;
+        await saveBaselines(userId, baselines);
+      }
+    } catch {
+      // Non-critical — baselines still in localStorage + Google Sheets
+    }
+
     navigate('/dashboard', { replace: true });
   };
 

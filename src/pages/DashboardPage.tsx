@@ -8,6 +8,7 @@ import { getCurrentWeek, getCompletedWorkoutCount, getWeekCompletionCount, getWe
 import { insertProgram } from '../lib/n8nService';
 import type { ProgramInput } from '../lib/n8nService';
 import { EXERCISE_EXCEL_ROWS } from '../constants/exerciseRows';
+import { saveWorkoutLog } from '../lib/supabaseSync';
 import type { WorkoutType } from '../types/exercise';
 import Header from '../components/layout/Header';
 import PageContainer from '../components/layout/PageContainer';
@@ -155,6 +156,14 @@ export default function DashboardPage() {
       for (const [key, sets] of Object.entries(editSets)) {
         updateLogSets(completedLog.id, key, sets);
       }
+
+      // Sync updated log to Supabase
+      const userId = user?.id;
+      const updatedLog = useWorkoutStore.getState().logs.find(l => l.id === completedLog.id);
+      if (userId && updatedLog) {
+        saveWorkoutLog(userId, updatedLog).catch(() => {});
+      }
+
       setEditMode(false);
     } catch (err) {
       console.error('Düzenleme kaydetme hatası:', err);

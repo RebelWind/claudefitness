@@ -9,6 +9,10 @@ import { getBaslangicDetails, getProgramDetails } from '../lib/n8nService';
 import type { ProgramExercise } from '../lib/n8nService';
 import { EXERCISE_EXCEL_MAPPING, exerciseIdFromSearchKey } from '../constants/exerciseMapping';
 import { getCurrentWeek } from '../lib/programScheduler';
+import {
+  getBaselinesFromDb, saveBaselines,
+  getWorkoutLogsFromDb, saveWorkoutLog,
+} from '../lib/supabaseSync';
 import type { ExerciseBaseline } from '../types/user';
 import type { WorkoutLog, ExerciseLog } from '../types/workout';
 import type { WorkoutType } from '../types/exercise';
@@ -18,7 +22,6 @@ const DAY_MAP: Record<string, 1 | 2 | 3> = { A: 1, B: 2, C: 3 };
 
 /**
  * Rebuild programStore from startDate + workout logs (no API call).
- * Called on every app init to keep programStore in sync.
  */
 function rebuildProgramFromLogs(startDate: string) {
   const programStore = useProgramStore.getState();
@@ -33,10 +36,44 @@ function rebuildProgramFromLogs(startDate: string) {
 }
 
 /**
- * Full restore from Supabase + n8n (baselines + workout logs).
- * Called when localStorage is empty/incomplete.
+ * Restore from Supabase DB (fast: 2 queries).
+ * Returns true if data was found, false if Supabase is empty.
  */
-async function restoreFromBackend(
+async function restoreFromSupabase(userId: string, startDate: string): Promise<boolean> {
+  const userStore = useUserStore.getState();
+  let hasData = false;
+
+  // Baselines
+  try {
+    const baselines = await getBaselinesFromDb(userId);
+    if (baselines.length > 0) {
+      userStore.setBaselines(baselines);
+      hasData = true;
+    }
+  } catch { /* ignore */ }
+
+  // Workout logs
+  try {
+    const logs = await getWorkoutLogsFromDb(userId);
+    if (logs.length > 0) {
+      useWorkoutStore.getState().setLogs(logs);
+      hasData = true;
+    }
+  } catch { /* ignore */ }
+
+  // Rebuild program from logs
+  if (hasData) {
+    rebuildProgramFromLogs(startDate);
+  }
+
+  return hasData;
+}
+
+/**
+ * Fallback restore from n8n webhooks (slow: N+1 calls).
+ * Also backfills Supabase DB for future fast restores.
+ */
+async function restoreFromN8n(
   supabaseUser: SupabaseUser,
   googleFileId: string,
   createdAt: string,
@@ -59,9 +96,10 @@ async function restoreFromBackend(
       }
     }
     userStore.setBaselines(baselines);
-  } catch {
-    // Non-critical — profile baselines will be empty
-  }
+
+    // Backfill to Supabase
+    saveBaselines(supabaseUser.id, baselines).catch(() => {});
+  } catch { /* ignore */ }
 
   // ── Restore workout logs ──
   try {
@@ -102,7 +140,7 @@ async function restoreFromBackend(
         });
 
         const logId = `restored-w${w}-${type}`;
-        restoredLogs.push({
+        const log: WorkoutLog = {
           id: logId,
           userId: supabaseUser.id,
           weekNumber: w,
@@ -113,18 +151,20 @@ async function restoreFromBackend(
           startedAt: createdAt,
           completedAt: createdAt,
           durationSeconds: null,
-        });
+        };
 
+        restoredLogs.push(log);
         programStore.markWorkoutComplete(w, DAY_MAP[type], logId);
+
+        // Backfill to Supabase
+        saveWorkoutLog(supabaseUser.id, log).catch(() => {});
       }
     }
 
     if (restoredLogs.length > 0) {
       useWorkoutStore.getState().setLogs(restoredLogs);
     }
-  } catch {
-    // Non-critical — dashboard will show empty workouts
-  }
+  } catch { /* ignore */ }
 }
 
 interface AuthState {
@@ -164,32 +204,28 @@ export const useAuthStore = create<AuthState>()((set) => ({
     // ── Same user check with full data validation ──
     const localUser = useUserStore.getState().user;
     if (localUser && localUser.id === user.id) {
-      // User hasn't completed setup — nothing to restore
       if (!localUser.hasCompletedSetup) {
         set({ userId: user.id, isAuthenticated: true, isLoading: false });
         return;
       }
 
-      // Setup done — rebuild programStore from local logs (always, since no persist)
+      // Rebuild programStore (no persist, always needed)
       if (localUser.programStartDate) {
         rebuildProgramFromLogs(localUser.programStartDate);
       }
 
-      // All critical data present → fast path (no API calls)
+      // All critical data present → fast path
       if (useUserStore.getState().baselines.length > 0) {
         set({ userId: user.id, isAuthenticated: true, isLoading: false });
         return;
       }
-
-      // Baselines or other data missing → fall through to backend restore
     }
 
-    // ── Backend restore (no local data or incomplete) ──
+    // ── Backend restore ──
     set({ userId: user.id, isAuthenticated: true, isLoading: true });
 
     getUserProgram(user.id).then(async backendProgram => {
       if (backendProgram?.google_file_id) {
-        // User completed setup — full restore
         userStore.setUser({
           id: user.id,
           email: user.email || '',
@@ -199,13 +235,16 @@ export const useAuthStore = create<AuthState>()((set) => ({
           programStartDate: backendProgram.created_at,
         });
 
-        // Initialize program structure first
         useProgramStore.getState().initializeProgram(backendProgram.created_at);
 
-        // Restore baselines + workout logs from n8n
-        await restoreFromBackend(user, backendProgram.google_file_id, backendProgram.created_at);
+        // Try Supabase first (fast: 2 queries)
+        const restored = await restoreFromSupabase(user.id, backendProgram.created_at);
+
+        if (!restored) {
+          // Supabase empty → fallback to n8n (slow, also backfills Supabase)
+          await restoreFromN8n(user, backendProgram.google_file_id, backendProgram.created_at);
+        }
       } else {
-        // Truly new user — needs onboarding
         userStore.setUser({
           id: user.id,
           email: user.email || '',
@@ -217,7 +256,6 @@ export const useAuthStore = create<AuthState>()((set) => ({
       }
       set({ isLoading: false });
     }).catch(() => {
-      // On error, default to new user flow
       userStore.setUser({
         id: user.id,
         email: user.email || '',
@@ -243,13 +281,8 @@ export const useAuthStore = create<AuthState>()((set) => ({
   },
 
   login: async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) {
-      return error.message;
-    }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return error.message;
     return null;
   },
 
@@ -257,13 +290,9 @@ export const useAuthStore = create<AuthState>()((set) => ({
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: { name },
-      },
+      options: { data: { name } },
     });
-    if (error) {
-      return error.message;
-    }
+    if (error) return error.message;
     const userStore = useUserStore.getState();
     const currentUser = userStore.user;
     if (currentUser) {
