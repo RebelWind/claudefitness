@@ -43,14 +43,17 @@ export const useAuthStore = create<AuthState>()((set) => ({
         useProgramDetailsStore.getState().clearCache();
       }
 
-      // Set user info (new user or first login)
+      // Check if program data exists (recovery after old logout that cleared userStore)
+      const existingProgram = useProgramStore.getState().program;
+      const hasExistingData = existingProgram !== null;
+
       userStore.setUser({
         id: user.id,
         email: user.email || '',
         name: user.user_metadata?.name || user.email?.split('@')[0] || '',
         createdAt: user.created_at,
-        hasCompletedSetup: false,
-        programStartDate: null,
+        hasCompletedSetup: hasExistingData,
+        programStartDate: existingProgram?.startDate ?? null,
       });
     } else {
       set({ userId: null, isAuthenticated: false, isLoading: false });
