@@ -5,9 +5,13 @@ import { useWorkoutStore } from './workoutStore';
 import { useProgramStore } from './programStore';
 import { useProgramDetailsStore } from './programDetailsStore';
 import { getUserProgram } from '../lib/programService';
-import { getBaslangicDetails } from '../lib/n8nService';
-import { EXERCISE_EXCEL_MAPPING } from '../constants/exerciseMapping';
+import { getBaslangicDetails, getProgramDetails } from '../lib/n8nService';
+import type { ProgramExercise } from '../lib/n8nService';
+import { EXERCISE_EXCEL_MAPPING, exerciseIdFromSearchKey } from '../constants/exerciseMapping';
+import { getCurrentWeek } from '../lib/programScheduler';
 import type { ExerciseBaseline } from '../types/user';
+import type { WorkoutLog, ExerciseLog } from '../types/workout';
+import type { WorkoutType } from '../types/exercise';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface AuthState {
@@ -97,6 +101,73 @@ export const useAuthStore = create<AuthState>()((set) => ({
             userStore.setBaselines(baselines);
           } catch {
             // Baselines couldn't be fetched — non-critical, profile will just be empty
+          }
+
+          // Restore completed workout logs from Google Sheets
+          try {
+            const weekCount = getCurrentWeek(backendProgram.created_at);
+            const fileId = backendProgram.google_file_id;
+            const restoredLogs: WorkoutLog[] = [];
+            const programStore = useProgramStore.getState();
+            const detailsStore = useProgramDetailsStore.getState();
+            const DAY_MAP: Record<string, 1 | 2 | 3> = { A: 1, B: 2, C: 3 };
+
+            for (let w = 1; w <= Math.min(weekCount, 12); w++) {
+              const exercises = await getProgramDetails(fileId, `Hafta ${w}`);
+
+              // Cache in programDetailsStore for dashboard use
+              useProgramDetailsStore.setState(s => ({
+                googleFileId: fileId,
+                weeklyPrograms: { ...s.weeklyPrograms, [w]: exercises },
+              }));
+
+              for (const type of ['A', 'B', 'C'] as WorkoutType[]) {
+                const group = `W${type}`;
+                const workoutExercises = exercises.filter((e: ProgramExercise) => e.grup === group);
+                const hasSetData = workoutExercises.some((e: ProgramExercise) => (e.set1 ?? 0) > 0);
+                if (!hasSetData) continue;
+
+                const exerciseLogs: ExerciseLog[] = workoutExercises.map((pe: ProgramExercise) => {
+                  const setCount = parseInt(pe.set_x_tekrar.match(/^(\d+)x/)?.[1] || '3');
+                  const allSets = [pe.set1 ?? 0, pe.set2 ?? 0, pe.set3 ?? 0];
+                  if (pe.set4 != null) allSets.push(pe.set4);
+                  return {
+                    exerciseId: exerciseIdFromSearchKey(pe.search_key) || 'bench_press' as any,
+                    weightKg: typeof pe.kg === 'number' ? pe.kg : 0,
+                    sets: allSets.slice(0, setCount),
+                    completed: true,
+                    searchKey: pe.search_key,
+                    exerciseName: pe.egzersiz_adi,
+                    targetSetsTekrar: pe.set_x_tekrar,
+                    rpe: pe.rpe,
+                    warmupSets: pe.isinma_setleri,
+                  };
+                });
+
+                const logId = `restored-w${w}-${type}`;
+                restoredLogs.push({
+                  id: logId,
+                  userId: user.id,
+                  weekNumber: w,
+                  workoutType: type,
+                  dayInWeek: DAY_MAP[type],
+                  date: backendProgram.created_at.split('T')[0],
+                  exercises: exerciseLogs,
+                  startedAt: backendProgram.created_at,
+                  completedAt: backendProgram.created_at,
+                  durationSeconds: null,
+                });
+
+                // Mark workout as completed in program store
+                programStore.markWorkoutComplete(w, DAY_MAP[type], logId);
+              }
+            }
+
+            if (restoredLogs.length > 0) {
+              useWorkoutStore.getState().setLogs(restoredLogs);
+            }
+          } catch {
+            // Workout logs couldn't be restored — non-critical
           }
         } else {
           // Truly new user — needs onboarding

@@ -123,6 +123,10 @@ export interface ProgramExercise {
   rpe: number | null;
   isinma_setleri: number[] | null;
   search_key: string;
+  set1?: number;
+  set2?: number;
+  set3?: number;
+  set4?: number;
 }
 
 export async function getProgramDetails(
