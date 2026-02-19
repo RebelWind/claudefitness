@@ -11,7 +11,6 @@ export interface ExerciseLog {
   targetSetsTekrar?: string;
   rpe?: number | null;
   warmupSets?: number[] | null;
-  excelSatirNo?: number;
 }
 
 export interface WorkoutLog {

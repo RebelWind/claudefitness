@@ -122,7 +122,6 @@ export interface ProgramExercise {
   rpe: number | null;
   isinma_setleri: number[] | null;
   search_key: string;
-  excel_satir_no: number;
 }
 
 export async function getProgramDetails(

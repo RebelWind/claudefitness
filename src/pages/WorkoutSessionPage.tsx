@@ -6,6 +6,7 @@ import { useProgramDetailsStore } from '../stores/programDetailsStore';
 import { insertProgram } from '../lib/n8nService';
 import type { ProgramInput } from '../lib/n8nService';
 import { EXERCISES } from '../constants/exercises';
+import { EXERCISE_EXCEL_ROWS } from '../constants/exerciseRows';
 import type { ExerciseLog } from '../types/workout';
 import Header from '../components/layout/Header';
 import Button from '../components/ui/Button';
@@ -94,12 +95,13 @@ export default function WorkoutSessionPage() {
     if (isLastExercise) {
       // Build inputs payload from all exercises
       const inputs: ProgramInput[] = activeSession.exercises.map(ex => {
+        const key = ex.searchKey || '';
         const input: ProgramInput = {
-          search_key: ex.searchKey || '',
+          search_key: key,
           set1: ex.sets[0] || 0,
           set2: ex.sets[1] || 0,
           set3: ex.sets[2] || 0,
-          excel_satir_no: ex.excelSatirNo || 0,
+          excel_satir_no: EXERCISE_EXCEL_ROWS[key] || 0,
         };
         // 4-set exercises (bench, squat, overhead, barbell row)
         if (ex.sets.length >= 4) {
