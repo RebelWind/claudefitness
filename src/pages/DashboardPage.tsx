@@ -111,6 +111,15 @@ export default function DashboardPage() {
     return map;
   }, [completedLog]);
 
+  // Map search_key → kg from program data (fallback for old logs with weightKg=0)
+  const programKgMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const pe of workoutExercises) {
+      if (typeof pe.kg === 'number') map[pe.search_key] = pe.kg;
+    }
+    return map;
+  }, [workoutExercises]);
+
   // Reset edit mode when switching workout/week
   useEffect(() => {
     setEditMode(false);
@@ -310,6 +319,7 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-1 mb-4">
               {completedLog.exercises.map((ex, idx) => {
                 const editingSets = editSets[ex.searchKey || ''];
+                const kg = ex.weightKg > 0 ? ex.weightKg : (programKgMap[ex.searchKey || ''] || 0);
                 return (
                   <div key={ex.searchKey || idx} className="py-2">
                     <div className="flex items-center justify-between">
@@ -318,13 +328,13 @@ export default function DashboardPage() {
                         <span className="text-sm text-text">{ex.exerciseName || ex.exerciseId}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        {ex.weightKg > 0 && (
-                          <span className="text-[10px] font-semibold text-primary-light bg-primary/10 px-1.5 py-0.5 rounded">
-                            {ex.weightKg} kg
+                        {kg > 0 && (
+                          <span className="text-xs font-bold text-primary-light bg-primary/10 px-2 py-0.5 rounded">
+                            {kg} kg
                           </span>
                         )}
                         {ex.rpe != null && (
-                          <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full font-semibold">
+                          <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full font-semibold">
                             RPE {ex.rpe}
                           </span>
                         )}
@@ -336,10 +346,10 @@ export default function DashboardPage() {
 
                     {/* Logged sets (not editing) */}
                     {!editMode && (
-                      <div className="flex items-center gap-1.5 mt-1 ml-3.5">
-                        <span className="text-[10px] text-text-muted">Tekrar:</span>
+                      <div className="flex items-center gap-1.5 mt-1.5 ml-3.5">
+                        <span className="text-xs text-text-muted">Tekrar:</span>
                         {ex.sets.map((reps, i) => (
-                          <span key={i} className="text-xs font-semibold text-success bg-success/10 px-1.5 py-0.5 rounded">
+                          <span key={i} className="text-sm font-semibold text-success bg-success/10 px-2 py-0.5 rounded">
                             {reps}
                           </span>
                         ))}
@@ -349,7 +359,7 @@ export default function DashboardPage() {
                     {/* Editable sets */}
                     {editMode && editingSets && (
                       <div className="flex items-center gap-1.5 mt-1.5 ml-3.5">
-                        <span className="text-[10px] text-text-muted">Set:</span>
+                        <span className="text-xs text-text-muted">Set:</span>
                         {editingSets.map((reps, i) => (
                           <input
                             key={i}
@@ -357,7 +367,7 @@ export default function DashboardPage() {
                             inputMode="numeric"
                             value={reps || ''}
                             onChange={e => handleEditSetValue(ex.searchKey || '', i, parseInt(e.target.value) || 0)}
-                            className="w-12 h-7 text-center text-xs font-bold rounded-lg bg-background
+                            className="w-14 h-8 text-center text-sm font-bold rounded-lg bg-background
                               border border-surface-light text-text focus:outline-none focus:border-primary-light"
                           />
                         ))}
@@ -381,12 +391,12 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       {typeof pe.kg === 'number' && pe.kg > 0 && (
-                        <span className="text-[10px] font-semibold text-primary-light bg-primary/10 px-1.5 py-0.5 rounded">
+                        <span className="text-xs font-bold text-primary-light bg-primary/10 px-2 py-0.5 rounded">
                           {pe.kg} kg
                         </span>
                       )}
                       {pe.rpe !== null && (
-                        <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full font-semibold">
+                        <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full font-semibold">
                           RPE {pe.rpe}
                         </span>
                       )}

@@ -382,13 +382,13 @@ export default function WorkoutSessionPage() {
                   </div>
                   <div className="flex items-center gap-2 ml-2 shrink-0">
                     {ex.weightKg > 0 && (
-                      <span className="text-[10px] font-semibold text-primary-light bg-primary/10 px-1.5 py-0.5 rounded">
+                      <span className="text-xs font-bold text-primary-light bg-primary/10 px-2 py-0.5 rounded">
                         {ex.weightKg} kg
                       </span>
                     )}
                     <div className="flex gap-1">
                       {ex.sets.map((reps, i) => (
-                        <span key={i} className="text-xs font-bold text-success bg-success/10 px-1.5 py-0.5 rounded">
+                        <span key={i} className="text-sm font-bold text-success bg-success/10 px-2 py-0.5 rounded">
                           {reps}
                         </span>
                       ))}
