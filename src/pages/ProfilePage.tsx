@@ -104,8 +104,11 @@ export default function ProfilePage() {
           }
         }
         if (inputs.length > 0) {
-          // Use weight 0 since kilo param is the user body weight (not used in update)
-          insertBaslangic(googleFileId, 0, inputs).catch(() => {});
+          // Wait for Excel to be updated before invalidating cache
+          await insertBaslangic(googleFileId, 0, inputs);
+
+          // Excel recalculated — clear cached weekly programs so workouts fetch fresh data
+          useProgramDetailsStore.setState({ weeklyPrograms: {} });
         }
       }
 
