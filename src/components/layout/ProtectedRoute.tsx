@@ -1,6 +1,7 @@
 import { Navigate, useLocation } from 'react-router';
 import { useAuthStore } from '../../stores/authStore';
 import { useUserStore } from '../../stores/userStore';
+import { useProgramStore } from '../../stores/programStore';
 
 const SETUP_PATHS = ['/welcome', '/setup'];
 const ALWAYS_ALLOWED_PATHS = ['/profile'];
@@ -9,6 +10,8 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
   const isLoading = useAuthStore(s => s.isLoading);
   const user = useUserStore(s => s.user);
+  const completeSetup = useUserStore(s => s.completeSetup);
+  const program = useProgramStore(s => s.program);
   const location = useLocation();
 
   if (isLoading) {
@@ -26,7 +29,14 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     return <Navigate to="/login" replace />;
   }
 
-  if (user && !user.hasCompletedSetup && !SETUP_PATHS.includes(location.pathname) && !ALWAYS_ALLOWED_PATHS.includes(location.pathname)) {
+  // Recovery: if hasCompletedSetup is false but program data exists,
+  // the user clearly completed setup before — fix the flag
+  if (user && !user.hasCompletedSetup && program) {
+    completeSetup();
+    return <>{children}</>;
+  }
+
+  if (user && !user.hasCompletedSetup && !program && !SETUP_PATHS.includes(location.pathname) && !ALWAYS_ALLOWED_PATHS.includes(location.pathname)) {
     return <Navigate to="/welcome" replace />;
   }
 
