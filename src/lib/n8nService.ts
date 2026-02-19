@@ -75,6 +75,34 @@ export interface BaslangicInput {
   excel_satir_no: number;
 }
 
+export interface BaslangicDetailRow {
+  search_key: string;
+  agirlik: number;
+  tekrar: number;
+}
+
+export async function getBaslangicDetails(
+  googleFileId: string,
+): Promise<BaslangicDetailRow[]> {
+  const response = await fetch(N8N_WEBHOOK_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${N8N_WEBHOOK_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      action: 'getBaslangicDetails',
+      google_file_id: googleFileId,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`getBaslangicDetails webhook hatası: ${response.status}`);
+  }
+
+  return response.json();
+}
+
 export async function insertBaslangic(
   googleFileId: string,
   kilo: number,

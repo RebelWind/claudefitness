@@ -4,8 +4,8 @@ import { useUserStore } from '../stores/userStore';
 import { useProgramStore } from '../stores/programStore';
 import { EXERCISE_GROUPS, GROUP_LABELS, GROUP_COLORS, EXERCISES, SETUP_SKIP_EXERCISES } from '../constants/exercises';
 import { getExcelMapping } from '../constants/exerciseMapping';
-import { insertBaslangic } from '../lib/n8nService';
-import type { BaslangicInput } from '../lib/n8nService';
+import { insertBaslangic, getBaslangicDetails } from '../lib/n8nService';
+import type { BaslangicInput, BaslangicDetailRow } from '../lib/n8nService';
 import { getUserProgram } from '../lib/programService';
 import { supabase } from '../lib/supabase';
 import type { ExerciseId, ExerciseGroup } from '../types/exercise';
@@ -31,6 +31,7 @@ export default function InitialSetupPage() {
   const [bodyWeight, setBodyWeight] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+  const [verifyError, setVerifyError] = useState<string[] | null>(null);
 
   // Key inputs by "groupKey-exerciseId" to handle duplicates across groups
   const [inputs, setInputs] = useState<Record<string, ExerciseInput>>(() => {
@@ -73,21 +74,8 @@ export default function InitialSetupPage() {
     });
   };
 
-  const sendToN8n = async () => {
-    // Get google_file_id from Supabase
-    const { data: { session } } = await supabase.auth.getSession();
-    const userId = session?.user?.id;
-    if (!userId) return;
-
-    const program = await getUserProgram(userId);
-    if (!program?.google_file_id) {
-      console.warn('google_file_id bulunamadı, insertBaslangic atlanamıyor.');
-      return;
-    }
-
-    // Build inputs array from all groups (skip exercises without baseline input)
+  const buildBaslangicInputs = (): BaslangicInput[] => {
     const baslangicInputs: BaslangicInput[] = [];
-
     for (const group of groupKeys) {
       for (const exId of EXERCISE_GROUPS[group]) {
         if (SETUP_SKIP_EXERCISES.has(exId)) continue;
@@ -104,12 +92,53 @@ export default function InitialSetupPage() {
         });
       }
     }
+    return baslangicInputs;
+  };
+
+  const sendToN8n = async (): Promise<{ googleFileId: string; sentInputs: BaslangicInput[] } | null> => {
+    // Get google_file_id from Supabase
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    if (!userId) return null;
+
+    const program = await getUserProgram(userId);
+    if (!program?.google_file_id) {
+      console.warn('google_file_id bulunamadı, insertBaslangic atlanıyor.');
+      return null;
+    }
+
+    const baslangicInputs = buildBaslangicInputs();
 
     await insertBaslangic(
       program.google_file_id,
       Number(bodyWeight),
       baslangicInputs,
     );
+
+    return { googleFileId: program.google_file_id, sentInputs: baslangicInputs };
+  };
+
+  const verifyBaslangic = (
+    sentInputs: BaslangicInput[],
+    remoteRows: BaslangicDetailRow[],
+  ): string[] => {
+    const remoteMap = new Map(remoteRows.map(r => [r.search_key, r]));
+    const mismatches: string[] = [];
+
+    for (const sent of sentInputs) {
+      const remote = remoteMap.get(sent.search_key);
+      if (!remote) {
+        mismatches.push(`${sent.search_key}: Excel'de bulunamadı`);
+        continue;
+      }
+      if (remote.agirlik !== sent.girilen_agirlik || remote.tekrar !== sent.girilen_tekrar) {
+        mismatches.push(
+          `${sent.search_key}: Girilen ${sent.girilen_agirlik}kg/${sent.girilen_tekrar}rep → Excel'de ${remote.agirlik}kg/${remote.tekrar}rep`,
+        );
+      }
+    }
+
+    return mismatches;
   };
 
   const handleNext = async () => {
@@ -126,13 +155,27 @@ export default function InitialSetupPage() {
     if (currentGroupIdx < groupKeys.length - 1) {
       setCurrentGroupIdx(prev => prev + 1);
     } else {
-      // All groups done — send to n8n, then complete
+      // All groups done — send to n8n, verify, then complete
       setSubmitting(true);
+      setVerifyError(null);
       try {
         setStatusMsg('Veriler Excel\'e gönderiliyor...');
-        await sendToN8n();
+        const result = await sendToN8n();
+
+        if (result) {
+          setStatusMsg('Veriler doğrulanıyor...');
+          const remoteRows = await getBaslangicDetails(result.googleFileId);
+          const mismatches = verifyBaslangic(result.sentInputs, remoteRows);
+
+          if (mismatches.length > 0) {
+            setVerifyError(mismatches);
+            setStatusMsg('');
+            setSubmitting(false);
+            return;
+          }
+        }
       } catch (err) {
-        console.error('insertBaslangic hatası:', err);
+        console.error('insertBaslangic / doğrulama hatası:', err);
       }
 
       setStatusMsg('');
@@ -252,6 +295,32 @@ export default function InitialSetupPage() {
 
         {statusMsg && (
           <p className="text-sm text-primary-light text-center animate-pulse mt-4">{statusMsg}</p>
+        )}
+
+        {verifyError && (
+          <div className="mt-4 bg-red-500/10 border border-red-500/30 rounded-2xl p-4">
+            <h3 className="text-red-400 font-semibold mb-2">
+              Veriler Excel'e doğru girilemedi!
+            </h3>
+            <p className="text-sm text-text-muted mb-3">
+              Aşağıdaki hareketlerde uyumsuzluk tespit edildi. Lütfen verileri kontrol edip tekrar gönderin.
+            </p>
+            <ul className="text-xs text-red-300 space-y-1 mb-3">
+              {verifyError.map((msg, i) => (
+                <li key={i}>• {msg}</li>
+              ))}
+            </ul>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setVerifyError(null);
+                setCurrentGroupIdx(0);
+              }}
+              className="w-full"
+            >
+              Başa Dön ve Tekrar Gönder
+            </Button>
+          </div>
         )}
 
         <div className="flex gap-3 mt-6 mb-4">
