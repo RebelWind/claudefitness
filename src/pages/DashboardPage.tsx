@@ -9,6 +9,7 @@ import { insertProgram } from '../lib/n8nService';
 import type { ProgramInput } from '../lib/n8nService';
 import { EXERCISE_EXCEL_ROWS } from '../constants/exerciseRows';
 import { exerciseIdFromSearchKey } from '../constants/exerciseMapping';
+import { EXERCISES } from '../constants/exercises';
 import { saveWorkoutLog } from '../lib/supabaseSync';
 import type { WorkoutType } from '../types/exercise';
 import Header from '../components/layout/Header';
@@ -349,7 +350,11 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-1 mb-4">
               {completedLog.exercises.map((ex, idx) => {
                 const editingSets = editSets[ex.searchKey || ''];
-                const kg = ex.weightKg > 0 ? ex.weightKg : (programKgMap[ex.searchKey || ''] || 0);
+                const exerciseInfo = EXERCISES[ex.exerciseId];
+                const isBodyweight = exerciseInfo && !exerciseInfo.usesWeight;
+                const kg = isBodyweight
+                  ? (user?.bodyWeightKg || 0)
+                  : (ex.weightKg > 0 ? ex.weightKg : (programKgMap[ex.searchKey || ''] || 0));
                 return (
                   <div key={ex.searchKey || idx} className="py-2">
                     <div className="flex items-center justify-between">
@@ -359,8 +364,10 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         {kg > 0 && (
-                          <span className="text-xs font-bold text-primary-light bg-primary/10 px-2 py-0.5 rounded">
-                            {kg} kg
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                            isBodyweight ? 'text-text-muted bg-surface-light' : 'text-primary-light bg-primary/10'
+                          }`}>
+                            {isBodyweight ? 'VA ' : ''}{kg} kg
                           </span>
                         )}
                         {ex.rpe != null && (
@@ -412,7 +419,12 @@ export default function DashboardPage() {
           {/* Upcoming workout → render from n8n program data */}
           {!isWorkoutDone && workoutExercises.length > 0 && (
             <div className="flex flex-col gap-1 mb-4">
-              {workoutExercises.map(pe => (
+              {workoutExercises.map(pe => {
+                const peExId = exerciseIdFromSearchKey(pe.search_key);
+                const peInfo = peExId ? EXERCISES[peExId] : null;
+                const peIsBodyweight = peInfo && !peInfo.usesWeight;
+                const peKg = peIsBodyweight ? (user?.bodyWeightKg || 0) : Number(pe.kg) || 0;
+                return (
                 <div key={pe.search_key} className="py-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -420,9 +432,11 @@ export default function DashboardPage() {
                       <span className="text-sm text-text">{pe.egzersiz_adi}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      {Number(pe.kg) > 0 && (
-                        <span className="text-xs font-bold text-primary-light bg-primary/10 px-2 py-0.5 rounded">
-                          {Number(pe.kg)} kg
+                      {peKg > 0 && (
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                          peIsBodyweight ? 'text-text-muted bg-surface-light' : 'text-primary-light bg-primary/10'
+                        }`}>
+                          {peIsBodyweight ? 'VA ' : ''}{peKg} kg
                         </span>
                       )}
                       {pe.rpe !== null && (
@@ -434,7 +448,8 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

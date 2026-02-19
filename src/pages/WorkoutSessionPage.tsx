@@ -63,6 +63,7 @@ export default function WorkoutSessionPage() {
   const [showSummary, setShowSummary] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const bodyWeightKg = useUserStore(s => s.user?.bodyWeightKg || 0);
 
   const handleRestComplete = useCallback(() => {
     setShowRest(false);
@@ -255,11 +256,15 @@ export default function WorkoutSessionPage() {
 
               {/* Target info from Excel */}
               <div className="flex items-center gap-3 mb-3">
-                {currentExercise.weightKg > 0 && (
-                  <span className="text-lg font-bold text-text">
-                    {currentExercise.weightKg} kg
-                  </span>
-                )}
+                {(() => {
+                  const isBodyweight = exerciseInfo && !exerciseInfo.usesWeight;
+                  const displayKg = isBodyweight ? bodyWeightKg : currentExercise.weightKg;
+                  return displayKg > 0 ? (
+                    <span className={`text-lg font-bold ${isBodyweight ? 'text-text-muted' : 'text-text'}`}>
+                      {isBodyweight ? 'VA ' : ''}{displayKg} kg
+                    </span>
+                  ) : null;
+                })()}
                 {currentExercise.targetSetsTekrar && (
                   <span className="text-primary-light font-semibold text-lg">
                     {currentExercise.targetSetsTekrar}
@@ -373,7 +378,11 @@ export default function WorkoutSessionPage() {
           {/* Exercise summary with kg + sets */}
           {activeSession && (
             <div className="flex flex-col gap-2 mb-4 max-h-64 overflow-y-auto">
-              {activeSession.exercises.map((ex, idx) => (
+              {activeSession.exercises.map((ex, idx) => {
+                const exInfo = EXERCISES[ex.exerciseId];
+                const isBw = exInfo && !exInfo.usesWeight;
+                const summaryKg = isBw ? bodyWeightKg : ex.weightKg;
+                return (
                 <div key={idx} className="flex items-center justify-between bg-surface rounded-xl px-3 py-2">
                   <div className="flex-1 min-w-0">
                     <span className="text-sm text-text truncate block">
@@ -381,9 +390,11 @@ export default function WorkoutSessionPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2 ml-2 shrink-0">
-                    {ex.weightKg > 0 && (
-                      <span className="text-xs font-bold text-primary-light bg-primary/10 px-2 py-0.5 rounded">
-                        {ex.weightKg} kg
+                    {summaryKg > 0 && (
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                        isBw ? 'text-text-muted bg-surface-light' : 'text-primary-light bg-primary/10'
+                      }`}>
+                        {isBw ? 'VA ' : ''}{summaryKg} kg
                       </span>
                     )}
                     <div className="flex gap-1">
@@ -395,7 +406,8 @@ export default function WorkoutSessionPage() {
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

@@ -7,6 +7,7 @@ export interface User {
   createdAt: string;
   hasCompletedSetup: boolean;
   programStartDate: string | null;
+  bodyWeightKg: number;
 }
 
 export interface ExerciseBaseline {

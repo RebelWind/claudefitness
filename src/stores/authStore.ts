@@ -97,6 +97,14 @@ async function restoreFromN8n(
     }
     userStore.setBaselines(baselines);
 
+    // Restore body weight from n8n response
+    if (details.kilo > 0) {
+      const currentUser = userStore.user;
+      if (currentUser) {
+        userStore.setUser({ ...currentUser, bodyWeightKg: details.kilo });
+      }
+    }
+
     // Backfill to Supabase
     saveBaselines(supabaseUser.id, baselines).catch(() => {});
   } catch { /* ignore */ }
@@ -233,6 +241,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
           createdAt: user.created_at,
           hasCompletedSetup: true,
           programStartDate: backendProgram.created_at,
+          bodyWeightKg: userStore.user?.bodyWeightKg || 0,
         });
 
         useProgramStore.getState().initializeProgram(backendProgram.created_at);
@@ -252,6 +261,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
           createdAt: user.created_at,
           hasCompletedSetup: false,
           programStartDate: null,
+          bodyWeightKg: 0,
         });
       }
       set({ isLoading: false });
@@ -263,6 +273,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
         createdAt: user.created_at,
         hasCompletedSetup: false,
         programStartDate: null,
+        bodyWeightKg: 0,
       });
       set({ isLoading: false });
     });

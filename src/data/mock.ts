@@ -12,6 +12,7 @@ export const MOCK_USER: User = {
   createdAt: '2026-01-05T10:00:00Z',
   hasCompletedSetup: true,
   programStartDate: '2026-01-06T00:00:00Z',
+  bodyWeightKg: 75,
 };
 
 export const MOCK_BASELINES: ExerciseBaseline[] = [
