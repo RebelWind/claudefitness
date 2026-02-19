@@ -56,10 +56,14 @@ export function getCompletedWorkoutCount(logs: WorkoutLog[]): number {
 }
 
 /**
- * Get completed workout count for a specific week (out of 3).
+ * Get completed unique workout types for a specific week (out of 3: A, B, C).
  */
 export function getWeekCompletionCount(logs: WorkoutLog[], weekNumber: number): number {
-  return logs.filter(l => l.weekNumber === weekNumber && l.completedAt !== null).length;
+  const types = new Set(
+    logs.filter(l => l.weekNumber === weekNumber && l.completedAt !== null)
+      .map(l => l.workoutType),
+  );
+  return types.size;
 }
 
 /**
@@ -67,19 +71,23 @@ export function getWeekCompletionCount(logs: WorkoutLog[], weekNumber: number): 
  * counting backwards from the latest fully completed week.
  */
 export function getWeekStreak(logs: WorkoutLog[], currentWeek: number): number {
+  const uniqueTypesForWeek = (week: number) => {
+    const types = new Set(
+      logs.filter(l => l.weekNumber === week && l.completedAt !== null)
+        .map(l => l.workoutType),
+    );
+    return types.size;
+  };
+
   let streak = 0;
-  // Check from the week before current backwards (current week is still in progress)
   for (let w = currentWeek - 1; w >= 1; w--) {
-    const weekDone = logs.filter(l => l.weekNumber === w && l.completedAt !== null).length;
-    if (weekDone >= 3) {
+    if (uniqueTypesForWeek(w) >= 3) {
       streak++;
     } else {
       break;
     }
   }
-  // Also check current week — if already all 3 done, count it too
-  const currentDone = logs.filter(l => l.weekNumber === currentWeek && l.completedAt !== null).length;
-  if (currentDone >= 3) {
+  if (uniqueTypesForWeek(currentWeek) >= 3) {
     streak++;
   }
   return streak;

@@ -48,11 +48,11 @@ export default function DashboardPage() {
   const totalCompleted = getCompletedWorkoutCount(logs);
   const totalWorkouts = 36;
   const overallProgress = (totalCompleted / totalWorkouts) * 100;
-  const thisWeekDone = getWeekCompletionCount(logs, currentWeek);
   const weekStreak = getWeekStreak(logs, currentWeek);
 
   // Completed workouts for the selected week
   const selectedWeekLogs = logs.filter(l => l.weekNumber === selectedWeek && l.completedAt);
+  const selectedWeekDone = getWeekCompletionCount(logs, selectedWeek);
 
   // Get program exercises from cache (or empty while loading)
   const programExercises = weeklyPrograms[selectedWeek] || [];
@@ -425,8 +425,8 @@ export default function DashboardPage() {
         {/* Quick Stats */}
         <div className="grid grid-cols-3 gap-3">
           <Card className="text-center">
-            <div className="text-2xl font-bold text-primary-light">{thisWeekDone}/3</div>
-            <div className="text-xs text-text-muted">Bu Hafta</div>
+            <div className={`text-2xl font-bold ${selectedWeekDone >= 3 ? 'text-success' : 'text-primary-light'}`}>{selectedWeekDone}/3</div>
+            <div className="text-xs text-text-muted">Hafta {selectedWeek}</div>
           </Card>
           <Card className="text-center">
             <div className="text-2xl font-bold text-accent">%{Math.round(overallProgress)}</div>
