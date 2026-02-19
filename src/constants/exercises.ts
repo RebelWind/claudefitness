@@ -36,6 +36,14 @@ export const GROUP_LABELS: Record<ExerciseGroup, string> = {
   G4: 'İzolasyon & Core',
 };
 
+/** Exercises that don't require baseline input in setup */
+export const SETUP_SKIP_EXERCISES: Set<ExerciseId> = new Set([
+  'crunch',
+  'leg_raises',
+  'plank',
+  'assisted_pull_ups',
+]);
+
 export const GROUP_COLORS: Record<ExerciseGroup, { bg: string; text: string; border: string; dot: string }> = {
   G1: { bg: 'bg-red-500/15', text: 'text-red-400', border: 'border-red-500/30', dot: 'bg-red-400' },
   G2: { bg: 'bg-yellow-500/15', text: 'text-yellow-400', border: 'border-yellow-500/30', dot: 'bg-yellow-400' },

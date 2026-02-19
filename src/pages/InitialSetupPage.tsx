@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useUserStore } from '../stores/userStore';
 import { useProgramStore } from '../stores/programStore';
-import { EXERCISE_GROUPS, GROUP_LABELS, GROUP_COLORS, EXERCISES } from '../constants/exercises';
+import { EXERCISE_GROUPS, GROUP_LABELS, GROUP_COLORS, EXERCISES, SETUP_SKIP_EXERCISES } from '../constants/exercises';
 import { getExcelMapping } from '../constants/exerciseMapping';
 import { insertBaslangic } from '../lib/n8nService';
 import type { BaslangicInput } from '../lib/n8nService';
@@ -45,7 +45,8 @@ export default function InitialSetupPage() {
   });
 
   const currentGroup = groupKeys[currentGroupIdx];
-  const exerciseIds = EXERCISE_GROUPS[currentGroup];
+  const allExerciseIds = EXERCISE_GROUPS[currentGroup];
+  const exerciseIds = allExerciseIds.filter(id => !SETUP_SKIP_EXERCISES.has(id));
   const colors = GROUP_COLORS[currentGroup];
   const progress = ((currentGroupIdx) / groupKeys.length) * 100;
 
@@ -84,11 +85,13 @@ export default function InitialSetupPage() {
       return;
     }
 
-    // Build inputs array from all groups
+    // Build inputs array from all groups (skip exercises without baseline input)
     const baslangicInputs: BaslangicInput[] = [];
 
     for (const group of groupKeys) {
       for (const exId of EXERCISE_GROUPS[group]) {
+        if (SETUP_SKIP_EXERCISES.has(exId)) continue;
+
         const mapping = getExcelMapping(group, exId);
         if (!mapping) continue;
 
@@ -110,7 +113,7 @@ export default function InitialSetupPage() {
   };
 
   const handleNext = async () => {
-    // Save baselines for current group
+    // Save baselines for visible exercises in current group
     exerciseIds.forEach(exId => {
       const input = inputs[inputKey(currentGroup, exId)];
       updateBaseline(
@@ -176,7 +179,6 @@ export default function InitialSetupPage() {
 
         <p className="text-sm text-text-muted mb-4">
           Her hareket için yapabildiğiniz ağırlık (kg) ve tekrar sayısını girin.
-          {currentGroup === 'G4' && ' (Plank için saniye cinsinden girin)'}
         </p>
 
         {/* Body weight input — shown on first step */}
