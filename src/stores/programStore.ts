@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import type { ProgramState, WeekPlan } from '../types/program';
 import type { WorkoutType } from '../types/exercise';
 
@@ -23,64 +22,59 @@ function createWeeks(): WeekPlan[] {
   }));
 }
 
-export const useProgramStore = create<ProgramStoreState>()(
-  persist(
-    (set, get) => ({
-      program: null,
+export const useProgramStore = create<ProgramStoreState>()((set, get) => ({
+  program: null,
 
-      initializeProgram: (startDate) => {
-        set({
-          program: {
-            currentWeek: 1,
-            totalWeeks: 12,
-            startDate,
-            weeks: createWeeks(),
-            isComplete: false,
-          },
-        });
+  initializeProgram: (startDate) => {
+    set({
+      program: {
+        currentWeek: 1,
+        totalWeeks: 12,
+        startDate,
+        weeks: createWeeks(),
+        isComplete: false,
       },
+    });
+  },
 
-      markWorkoutComplete: (weekNumber, dayInWeek, logId) => {
-        const program = get().program;
-        if (!program) return;
+  markWorkoutComplete: (weekNumber, dayInWeek, logId) => {
+    const program = get().program;
+    if (!program) return;
 
-        const weeks = program.weeks.map(week => {
-          if (week.weekNumber !== weekNumber) return week;
-          return {
-            ...week,
-            workouts: week.workouts.map(w => {
-              if (w.dayInWeek !== dayInWeek) return w;
-              return { ...w, completed: true, logId };
-            }),
-          };
-        });
+    const weeks = program.weeks.map(week => {
+      if (week.weekNumber !== weekNumber) return week;
+      return {
+        ...week,
+        workouts: week.workouts.map(w => {
+          if (w.dayInWeek !== dayInWeek) return w;
+          return { ...w, completed: true, logId };
+        }),
+      };
+    });
 
-        // Check if all workouts in current week are done
-        const currentWeekPlan = weeks.find(w => w.weekNumber === weekNumber);
-        const allDone = currentWeekPlan?.workouts.every(w => w.completed) ?? false;
+    // Check if all workouts in current week are done
+    const currentWeekPlan = weeks.find(w => w.weekNumber === weekNumber);
+    const allDone = currentWeekPlan?.workouts.every(w => w.completed) ?? false;
 
-        let newCurrentWeek = program.currentWeek;
-        if (allDone && weekNumber === program.currentWeek && weekNumber < 12) {
-          newCurrentWeek = weekNumber + 1;
-          // Update week statuses
-          weeks.forEach(w => {
-            if (w.weekNumber < newCurrentWeek) w.status = 'completed';
-            else if (w.weekNumber === newCurrentWeek) w.status = 'current';
-          });
-        }
+    let newCurrentWeek = program.currentWeek;
+    if (allDone && weekNumber === program.currentWeek && weekNumber < 12) {
+      newCurrentWeek = weekNumber + 1;
+      // Update week statuses
+      weeks.forEach(w => {
+        if (w.weekNumber < newCurrentWeek) w.status = 'completed';
+        else if (w.weekNumber === newCurrentWeek) w.status = 'current';
+      });
+    }
 
-        set({
-          program: {
-            ...program,
-            currentWeek: newCurrentWeek,
-            weeks,
-            isComplete: newCurrentWeek === 12 && allDone,
-          },
-        });
+    set({
+      program: {
+        ...program,
+        currentWeek: newCurrentWeek,
+        weeks,
+        isComplete: newCurrentWeek === 12 && allDone,
       },
+    });
+  },
 
-      reset: () => set({ program: null }),
-    }),
-    { name: 'fitness-program' },
-  ),
-);
+  reset: () => set({ program: null }),
+}));

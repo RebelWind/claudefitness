@@ -14,6 +14,119 @@ import type { WorkoutLog, ExerciseLog } from '../types/workout';
 import type { WorkoutType } from '../types/exercise';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
+const DAY_MAP: Record<string, 1 | 2 | 3> = { A: 1, B: 2, C: 3 };
+
+/**
+ * Rebuild programStore from startDate + workout logs (no API call).
+ * Called on every app init to keep programStore in sync.
+ */
+function rebuildProgramFromLogs(startDate: string) {
+  const programStore = useProgramStore.getState();
+  programStore.initializeProgram(startDate);
+
+  const logs = useWorkoutStore.getState().logs;
+  for (const log of logs) {
+    if (log.completedAt) {
+      programStore.markWorkoutComplete(log.weekNumber, log.dayInWeek, log.id);
+    }
+  }
+}
+
+/**
+ * Full restore from Supabase + n8n (baselines + workout logs).
+ * Called when localStorage is empty/incomplete.
+ */
+async function restoreFromBackend(
+  supabaseUser: SupabaseUser,
+  googleFileId: string,
+  createdAt: string,
+) {
+  const userStore = useUserStore.getState();
+
+  // ── Restore baselines ──
+  try {
+    const details = await getBaslangicDetails(googleFileId);
+    const baselines: ExerciseBaseline[] = [];
+    for (const input of details.inputs) {
+      const mapping = EXERCISE_EXCEL_MAPPING.find(m => m.search_key === input.search_key);
+      if (mapping) {
+        baselines.push({
+          group: mapping.grup,
+          exerciseId: mapping.exerciseId,
+          initialWeightKg: input.agirlik,
+          initialReps: input['tekrar sayisi'],
+        });
+      }
+    }
+    userStore.setBaselines(baselines);
+  } catch {
+    // Non-critical — profile baselines will be empty
+  }
+
+  // ── Restore workout logs ──
+  try {
+    const weekCount = getCurrentWeek(createdAt);
+    const restoredLogs: WorkoutLog[] = [];
+    const programStore = useProgramStore.getState();
+
+    for (let w = 1; w <= Math.min(weekCount, 12); w++) {
+      const exercises = await getProgramDetails(googleFileId, `Hafta ${w}`);
+
+      // Cache in programDetailsStore
+      useProgramDetailsStore.setState(s => ({
+        googleFileId,
+        weeklyPrograms: { ...s.weeklyPrograms, [w]: exercises },
+      }));
+
+      for (const type of ['A', 'B', 'C'] as WorkoutType[]) {
+        const group = `W${type}`;
+        const workoutExercises = exercises.filter((e: ProgramExercise) => e.grup === group);
+        const hasSetData = workoutExercises.some((e: ProgramExercise) => (e.set1 ?? 0) > 0);
+        if (!hasSetData) continue;
+
+        const exerciseLogs: ExerciseLog[] = workoutExercises.map((pe: ProgramExercise) => {
+          const setCount = parseInt(pe.set_x_tekrar.match(/^(\d+)x/)?.[1] || '3');
+          const allSets = [pe.set1 ?? 0, pe.set2 ?? 0, pe.set3 ?? 0];
+          if (pe.set4 != null) allSets.push(pe.set4);
+          return {
+            exerciseId: exerciseIdFromSearchKey(pe.search_key) || 'bench_press' as any,
+            weightKg: typeof pe.kg === 'number' ? pe.kg : 0,
+            sets: allSets.slice(0, setCount),
+            completed: true,
+            searchKey: pe.search_key,
+            exerciseName: pe.egzersiz_adi,
+            targetSetsTekrar: pe.set_x_tekrar,
+            rpe: pe.rpe,
+            warmupSets: pe.isinma_setleri,
+          };
+        });
+
+        const logId = `restored-w${w}-${type}`;
+        restoredLogs.push({
+          id: logId,
+          userId: supabaseUser.id,
+          weekNumber: w,
+          workoutType: type,
+          dayInWeek: DAY_MAP[type],
+          date: createdAt.split('T')[0],
+          exercises: exerciseLogs,
+          startedAt: createdAt,
+          completedAt: createdAt,
+          durationSeconds: null,
+        });
+
+        programStore.markWorkoutComplete(w, DAY_MAP[type], logId);
+      }
+    }
+
+    if (restoredLogs.length > 0) {
+      useWorkoutStore.getState().setLogs(restoredLogs);
+    }
+  } catch {
+    // Non-critical — dashboard will show empty workouts
+  }
+}
+
 interface AuthState {
   userId: string | null;
   isAuthenticated: boolean;
@@ -31,158 +144,68 @@ export const useAuthStore = create<AuthState>()((set) => ({
   isLoading: true,
 
   setFromSupabaseUser: (user) => {
-    if (user) {
-      const userStore = useUserStore.getState();
-      const existingUser = userStore.user;
+    if (!user) {
+      set({ userId: null, isAuthenticated: false, isLoading: false });
+      return;
+    }
 
-      // Same user logging back in with local data — keep everything
-      if (existingUser && existingUser.id === user.id) {
+    const userStore = useUserStore.getState();
+    const existingUser = userStore.user;
+
+    // ── Different user → clear all stores ──
+    if (existingUser && existingUser.id !== user.id) {
+      userStore.clear();
+      useWorkoutStore.getState().abandonWorkout();
+      useWorkoutStore.getState().setLogs([]);
+      useProgramStore.getState().reset();
+      useProgramDetailsStore.getState().clearCache();
+    }
+
+    // ── Same user check with full data validation ──
+    const localUser = useUserStore.getState().user;
+    if (localUser && localUser.id === user.id) {
+      // User hasn't completed setup — nothing to restore
+      if (!localUser.hasCompletedSetup) {
         set({ userId: user.id, isAuthenticated: true, isLoading: false });
         return;
       }
 
-      // Different user — clear all stores for clean slate
-      if (existingUser && existingUser.id !== user.id) {
-        userStore.clear();
-        const workoutStore = useWorkoutStore.getState();
-        workoutStore.abandonWorkout();
-        workoutStore.setLogs([]);
-        useProgramStore.getState().reset();
-        useProgramDetailsStore.getState().clearCache();
+      // Setup done — rebuild programStore from local logs (always, since no persist)
+      if (localUser.programStartDate) {
+        rebuildProgramFromLogs(localUser.programStartDate);
       }
 
-      // Check localStorage first
-      const existingProgram = useProgramStore.getState().program;
-      if (existingProgram) {
+      // All critical data present → fast path (no API calls)
+      if (useUserStore.getState().baselines.length > 0) {
+        set({ userId: user.id, isAuthenticated: true, isLoading: false });
+        return;
+      }
+
+      // Baselines or other data missing → fall through to backend restore
+    }
+
+    // ── Backend restore (no local data or incomplete) ──
+    set({ userId: user.id, isAuthenticated: true, isLoading: true });
+
+    getUserProgram(user.id).then(async backendProgram => {
+      if (backendProgram?.google_file_id) {
+        // User completed setup — full restore
         userStore.setUser({
           id: user.id,
           email: user.email || '',
           name: user.user_metadata?.name || user.email?.split('@')[0] || '',
           createdAt: user.created_at,
           hasCompletedSetup: true,
-          programStartDate: existingProgram.startDate,
+          programStartDate: backendProgram.created_at,
         });
-        set({ userId: user.id, isAuthenticated: true, isLoading: false });
-        return;
-      }
 
-      // No local data — keep loading while we check backend
-      set({ userId: user.id, isAuthenticated: true, isLoading: true });
+        // Initialize program structure first
+        useProgramStore.getState().initializeProgram(backendProgram.created_at);
 
-      getUserProgram(user.id).then(async backendProgram => {
-        if (backendProgram?.google_file_id) {
-          // User completed setup before — restore from backend
-          userStore.setUser({
-            id: user.id,
-            email: user.email || '',
-            name: user.user_metadata?.name || user.email?.split('@')[0] || '',
-            createdAt: user.created_at,
-            hasCompletedSetup: true,
-            programStartDate: backendProgram.created_at,
-          });
-          // Re-create local program structure
-          useProgramStore.getState().initializeProgram(backendProgram.created_at);
-
-          // Restore baselines from Google Sheets (per-group)
-          try {
-            const details = await getBaslangicDetails(backendProgram.google_file_id);
-            const baselines: ExerciseBaseline[] = [];
-            for (const input of details.inputs) {
-              const mapping = EXERCISE_EXCEL_MAPPING.find(m => m.search_key === input.search_key);
-              if (mapping) {
-                baselines.push({
-                  group: mapping.grup,
-                  exerciseId: mapping.exerciseId,
-                  initialWeightKg: input.agirlik,
-                  initialReps: input['tekrar sayisi'],
-                });
-              }
-            }
-            userStore.setBaselines(baselines);
-          } catch {
-            // Baselines couldn't be fetched — non-critical, profile will just be empty
-          }
-
-          // Restore completed workout logs from Google Sheets
-          try {
-            const weekCount = getCurrentWeek(backendProgram.created_at);
-            const fileId = backendProgram.google_file_id;
-            const restoredLogs: WorkoutLog[] = [];
-            const programStore = useProgramStore.getState();
-            const detailsStore = useProgramDetailsStore.getState();
-            const DAY_MAP: Record<string, 1 | 2 | 3> = { A: 1, B: 2, C: 3 };
-
-            for (let w = 1; w <= Math.min(weekCount, 12); w++) {
-              const exercises = await getProgramDetails(fileId, `Hafta ${w}`);
-
-              // Cache in programDetailsStore for dashboard use
-              useProgramDetailsStore.setState(s => ({
-                googleFileId: fileId,
-                weeklyPrograms: { ...s.weeklyPrograms, [w]: exercises },
-              }));
-
-              for (const type of ['A', 'B', 'C'] as WorkoutType[]) {
-                const group = `W${type}`;
-                const workoutExercises = exercises.filter((e: ProgramExercise) => e.grup === group);
-                const hasSetData = workoutExercises.some((e: ProgramExercise) => (e.set1 ?? 0) > 0);
-                if (!hasSetData) continue;
-
-                const exerciseLogs: ExerciseLog[] = workoutExercises.map((pe: ProgramExercise) => {
-                  const setCount = parseInt(pe.set_x_tekrar.match(/^(\d+)x/)?.[1] || '3');
-                  const allSets = [pe.set1 ?? 0, pe.set2 ?? 0, pe.set3 ?? 0];
-                  if (pe.set4 != null) allSets.push(pe.set4);
-                  return {
-                    exerciseId: exerciseIdFromSearchKey(pe.search_key) || 'bench_press' as any,
-                    weightKg: typeof pe.kg === 'number' ? pe.kg : 0,
-                    sets: allSets.slice(0, setCount),
-                    completed: true,
-                    searchKey: pe.search_key,
-                    exerciseName: pe.egzersiz_adi,
-                    targetSetsTekrar: pe.set_x_tekrar,
-                    rpe: pe.rpe,
-                    warmupSets: pe.isinma_setleri,
-                  };
-                });
-
-                const logId = `restored-w${w}-${type}`;
-                restoredLogs.push({
-                  id: logId,
-                  userId: user.id,
-                  weekNumber: w,
-                  workoutType: type,
-                  dayInWeek: DAY_MAP[type],
-                  date: backendProgram.created_at.split('T')[0],
-                  exercises: exerciseLogs,
-                  startedAt: backendProgram.created_at,
-                  completedAt: backendProgram.created_at,
-                  durationSeconds: null,
-                });
-
-                // Mark workout as completed in program store
-                programStore.markWorkoutComplete(w, DAY_MAP[type], logId);
-              }
-            }
-
-            if (restoredLogs.length > 0) {
-              useWorkoutStore.getState().setLogs(restoredLogs);
-            }
-          } catch {
-            // Workout logs couldn't be restored — non-critical
-          }
-        } else {
-          // Truly new user — needs onboarding
-          userStore.setUser({
-            id: user.id,
-            email: user.email || '',
-            name: user.user_metadata?.name || user.email?.split('@')[0] || '',
-            createdAt: user.created_at,
-            hasCompletedSetup: false,
-            programStartDate: null,
-          });
-        }
-        set({ isLoading: false });
-      }).catch(() => {
-        // On error, default to new user flow
+        // Restore baselines + workout logs from n8n
+        await restoreFromBackend(user, backendProgram.google_file_id, backendProgram.created_at);
+      } else {
+        // Truly new user — needs onboarding
         userStore.setUser({
           id: user.id,
           email: user.email || '',
@@ -191,11 +214,20 @@ export const useAuthStore = create<AuthState>()((set) => ({
           hasCompletedSetup: false,
           programStartDate: null,
         });
-        set({ isLoading: false });
+      }
+      set({ isLoading: false });
+    }).catch(() => {
+      // On error, default to new user flow
+      userStore.setUser({
+        id: user.id,
+        email: user.email || '',
+        name: user.user_metadata?.name || user.email?.split('@')[0] || '',
+        createdAt: user.created_at,
+        hasCompletedSetup: false,
+        programStartDate: null,
       });
-    } else {
-      set({ userId: null, isAuthenticated: false, isLoading: false });
-    }
+      set({ isLoading: false });
+    });
   },
 
   initialize: async () => {
@@ -232,7 +264,6 @@ export const useAuthStore = create<AuthState>()((set) => ({
     if (error) {
       return error.message;
     }
-    // Set the new user as not having completed setup
     const userStore = useUserStore.getState();
     const currentUser = userStore.user;
     if (currentUser) {
@@ -244,6 +275,5 @@ export const useAuthStore = create<AuthState>()((set) => ({
   logout: async () => {
     await supabase.auth.signOut();
     set({ userId: null, isAuthenticated: false });
-    // Data is preserved in localStorage — restored when same user logs back in
   },
 }));
