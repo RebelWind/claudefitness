@@ -118,8 +118,8 @@ export async function getBaslangicDetails(
 export interface ProgramExercise {
   grup: string;
   egzersiz_adi: string;
+  kg: number | string;
   set_x_tekrar: string;
-  agirlik: number | null;
   rpe: number | null;
   isinma_setleri: number[] | null;
   search_key: string;

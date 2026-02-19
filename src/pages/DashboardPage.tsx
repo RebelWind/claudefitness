@@ -309,11 +309,9 @@ export default function DashboardPage() {
                         <span className="text-sm text-text">{pe.egzersiz_adi}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        {pe.agirlik !== null && pe.agirlik !== undefined && pe.agirlik > 0 && (
-                          <span className="text-[10px] font-semibold text-primary-light bg-primary/10 px-1.5 py-0.5 rounded">
-                            {pe.agirlik} kg
-                          </span>
-                        )}
+                        <span className="text-[10px] font-semibold text-primary-light bg-primary/10 px-1.5 py-0.5 rounded">
+                          {typeof pe.kg === 'number' ? `${pe.kg} kg` : pe.kg}
+                        </span>
                         {pe.rpe !== null && (
                           <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full font-semibold">
                             RPE {pe.rpe}
