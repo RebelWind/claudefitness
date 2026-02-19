@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import { useUserStore } from './userStore';
+import { useWorkoutStore } from './workoutStore';
+import { useProgramStore } from './programStore';
 import { useProgramDetailsStore } from './programDetailsStore';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
@@ -23,18 +25,33 @@ export const useAuthStore = create<AuthState>()((set) => ({
   setFromSupabaseUser: (user) => {
     if (user) {
       set({ userId: user.id, isAuthenticated: true, isLoading: false });
-      // Sync user store
       const userStore = useUserStore.getState();
-      if (!userStore.user || userStore.user.id !== user.id) {
-        userStore.setUser({
-          id: user.id,
-          email: user.email || '',
-          name: user.user_metadata?.name || user.email?.split('@')[0] || '',
-          createdAt: user.created_at,
-          hasCompletedSetup: userStore.user?.hasCompletedSetup ?? false,
-          programStartDate: userStore.user?.programStartDate ?? null,
-        });
+      const existingUser = userStore.user;
+
+      if (existingUser && existingUser.id === user.id) {
+        // Same user logging back in — keep all data as-is
+        return;
       }
+
+      if (existingUser && existingUser.id !== user.id) {
+        // Different user — clear all stores for clean slate
+        userStore.clear();
+        const workoutStore = useWorkoutStore.getState();
+        workoutStore.abandonWorkout();
+        workoutStore.setLogs([]);
+        useProgramStore.getState().reset();
+        useProgramDetailsStore.getState().clearCache();
+      }
+
+      // Set user info (new user or first login)
+      userStore.setUser({
+        id: user.id,
+        email: user.email || '',
+        name: user.user_metadata?.name || user.email?.split('@')[0] || '',
+        createdAt: user.created_at,
+        hasCompletedSetup: false,
+        programStartDate: null,
+      });
     } else {
       set({ userId: null, isAuthenticated: false, isLoading: false });
     }
@@ -86,7 +103,6 @@ export const useAuthStore = create<AuthState>()((set) => ({
   logout: async () => {
     await supabase.auth.signOut();
     set({ userId: null, isAuthenticated: false });
-    useUserStore.getState().clear();
-    useProgramDetailsStore.getState().clearCache();
+    // Data is preserved in localStorage — restored when same user logs back in
   },
 }));
