@@ -27,6 +27,7 @@ interface WorkoutState {
   completeWorkout: () => void;
   abandonWorkout: () => void;
   setLogs: (logs: WorkoutLog[]) => void;
+  updateLogSets: (logId: string, searchKey: string, sets: number[]) => void;
 }
 
 export const useWorkoutStore = create<WorkoutState>()(
@@ -142,6 +143,19 @@ export const useWorkoutStore = create<WorkoutState>()(
       },
 
       setLogs: (logs) => set({ logs }),
+
+      updateLogSets: (logId, searchKey, newSets) => {
+        const logs = get().logs.map(log => {
+          if (log.id !== logId) return log;
+          return {
+            ...log,
+            exercises: log.exercises.map(ex =>
+              ex.searchKey === searchKey ? { ...ex, sets: newSets } : ex,
+            ),
+          };
+        });
+        set({ logs });
+      },
     }),
     { name: 'fitness-workout' },
   ),

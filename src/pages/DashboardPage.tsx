@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { useUserStore } from '../stores/userStore';
 import { useWorkoutStore } from '../stores/workoutStore';
 import { useProgramStore } from '../stores/programStore';
 import { useProgramDetailsStore } from '../stores/programDetailsStore';
 import { getCurrentWeek, getCompletedWorkoutCount } from '../lib/programScheduler';
+import { insertProgram } from '../lib/n8nService';
+import type { ProgramInput } from '../lib/n8nService';
+import { EXERCISE_EXCEL_ROWS } from '../constants/exerciseRows';
 import type { WorkoutType } from '../types/exercise';
 import Header from '../components/layout/Header';
 import PageContainer from '../components/layout/PageContainer';
@@ -22,7 +25,9 @@ export default function DashboardPage() {
   const logs = useWorkoutStore(s => s.logs);
   const startWorkoutFromProgram = useWorkoutStore(s => s.startWorkoutFromProgram);
   const activeSession = useWorkoutStore(s => s.activeSession);
+  const updateLogSets = useWorkoutStore(s => s.updateLogSets);
   const program = useProgramStore(s => s.program);
+  const googleFileId = useProgramDetailsStore(s => s.googleFileId);
 
   // Program details cache store
   const weeklyPrograms = useProgramDetailsStore(s => s.weeklyPrograms);
@@ -36,6 +41,9 @@ export default function DashboardPage() {
 
   const [selectedWeek, setSelectedWeek] = useState(currentWeek);
   const [selectedWorkout, setSelectedWorkout] = useState<WorkoutType>('A');
+  const [editMode, setEditMode] = useState(false);
+  const [editSets, setEditSets] = useState<Record<string, number[]>>({});
+  const [isSaving, setIsSaving] = useState(false);
 
   const totalCompleted = getCompletedWorkoutCount(logs);
   const totalWorkouts = 36;
@@ -83,6 +91,75 @@ export default function DashboardPage() {
   const hasActiveSession = activeSession !== null;
   const isActiveForSelected = activeSession?.workoutType === selectedWorkout
     && activeSession?.weekNumber === selectedWeek;
+
+  // Find the completed log for the selected workout/week
+  const completedLog = useMemo(
+    () => selectedWeekLogs.find(l => l.workoutType === selectedWorkout) || null,
+    [selectedWeekLogs, selectedWorkout],
+  );
+
+  // Map search_key → logged sets for quick lookup
+  const loggedSetsMap = useMemo(() => {
+    if (!completedLog) return {};
+    const map: Record<string, number[]> = {};
+    for (const ex of completedLog.exercises) {
+      if (ex.searchKey) map[ex.searchKey] = ex.sets;
+    }
+    return map;
+  }, [completedLog]);
+
+  // Reset edit mode when switching workout/week
+  useEffect(() => {
+    setEditMode(false);
+    setEditSets({});
+  }, [selectedWeek, selectedWorkout]);
+
+  const handleStartEdit = () => {
+    // Populate edit state from the logged data
+    setEditSets({ ...loggedSetsMap });
+    setEditMode(true);
+  };
+
+  const handleEditSetValue = (searchKey: string, setIdx: number, value: number) => {
+    setEditSets(prev => {
+      const current = [...(prev[searchKey] || [])];
+      current[setIdx] = Math.max(0, value);
+      return { ...prev, [searchKey]: current };
+    });
+  };
+
+  const handleSaveEdits = async () => {
+    if (!completedLog || !googleFileId) return;
+    setIsSaving(true);
+    try {
+      // Build ProgramInput[] from edited sets
+      const inputs: ProgramInput[] = Object.entries(editSets).map(([key, sets]) => {
+        const input: ProgramInput = {
+          search_key: key,
+          set1: sets[0] || 0,
+          set2: sets[1] || 0,
+          set3: sets[2] || 0,
+          excel_satir_no: EXERCISE_EXCEL_ROWS[key] || 0,
+        };
+        if (sets.length >= 4) {
+          input.set4 = sets[3] || 0;
+        }
+        return input;
+      });
+
+      await insertProgram(googleFileId, `Hafta ${selectedWeek}`, inputs);
+
+      // Update local log
+      for (const [key, sets] of Object.entries(editSets)) {
+        updateLogSets(completedLog.id, key, sets);
+      }
+      setEditMode(false);
+    } catch (err) {
+      console.error('Düzenleme kaydetme hatası:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <>
@@ -218,27 +295,65 @@ export default function DashboardPage() {
           )}
 
           {workoutExercises.length > 0 && (
-            <div className="flex flex-col gap-1.5 mb-4">
-              {workoutExercises.map(pe => (
-                <div key={pe.search_key} className="flex items-center justify-between py-1.5">
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary-light" />
-                    <span className="text-sm text-text">{pe.egzersiz_adi}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {pe.rpe !== null && (
-                      <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full font-semibold">
-                        RPE {pe.rpe}
-                      </span>
+            <div className="flex flex-col gap-1 mb-4">
+              {workoutExercises.map(pe => {
+                const loggedSets = loggedSetsMap[pe.search_key];
+                const editingSets = editSets[pe.search_key];
+
+                return (
+                  <div key={pe.search_key} className="py-2">
+                    {/* Exercise header row */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-1.5 h-1.5 rounded-full ${loggedSets ? 'bg-success' : 'bg-primary-light'}`} />
+                        <span className="text-sm text-text">{pe.egzersiz_adi}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {pe.rpe !== null && (
+                          <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full font-semibold">
+                            RPE {pe.rpe}
+                          </span>
+                        )}
+                        <span className="text-xs text-text-muted font-medium">{pe.set_x_tekrar}</span>
+                      </div>
+                    </div>
+
+                    {/* Logged sets display (when workout is done and NOT editing) */}
+                    {loggedSets && !editMode && (
+                      <div className="flex items-center gap-1.5 mt-1 ml-3.5">
+                        <span className="text-[10px] text-text-muted">Tekrar:</span>
+                        {loggedSets.map((reps, i) => (
+                          <span key={i} className="text-xs font-semibold text-success bg-success/10 px-1.5 py-0.5 rounded">
+                            {reps}
+                          </span>
+                        ))}
+                      </div>
                     )}
-                    <span className="text-xs text-text-muted font-medium">{pe.set_x_tekrar}</span>
+
+                    {/* Editable sets (when in edit mode) */}
+                    {editMode && editingSets && (
+                      <div className="flex items-center gap-1.5 mt-1.5 ml-3.5">
+                        <span className="text-[10px] text-text-muted">Set:</span>
+                        {editingSets.map((reps, i) => (
+                          <input
+                            key={i}
+                            type="number"
+                            inputMode="numeric"
+                            value={reps || ''}
+                            onChange={e => handleEditSetValue(pe.search_key, i, parseInt(e.target.value) || 0)}
+                            className="w-12 h-7 text-center text-xs font-bold rounded-lg bg-background
+                              border border-surface-light text-text focus:outline-none focus:border-primary-light"
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
-          {/* Action Button */}
+          {/* Action Buttons */}
           {isActiveForSelected ? (
             <Button
               fullWidth
@@ -247,6 +362,43 @@ export default function DashboardPage() {
             >
               Antrenmana Devam Et
             </Button>
+          ) : editMode ? (
+            /* Edit mode: Save / Cancel */
+            <div className="flex gap-3">
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={() => { setEditMode(false); setEditSets({}); }}
+                disabled={isSaving}
+              >
+                İptal
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={handleSaveEdits}
+                disabled={isSaving}
+              >
+                {isSaving ? 'Kaydediliyor...' : 'Kaydet'}
+              </Button>
+            </div>
+          ) : isWorkoutDone ? (
+            /* Completed: Edit / Redo */
+            <div className="flex gap-3">
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={handleStartEdit}
+              >
+                Düzenle
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => handleStartWorkout(selectedWorkout)}
+                disabled={hasActiveSession && !isActiveForSelected}
+              >
+                Tekrar Yap
+              </Button>
+            </div>
           ) : (
             <Button
               fullWidth
@@ -254,11 +406,11 @@ export default function DashboardPage() {
               onClick={() => handleStartWorkout(selectedWorkout)}
               disabled={loading || programExercises.length === 0 || (hasActiveSession && !isActiveForSelected)}
             >
-              {isWorkoutDone ? 'Tekrar Yap' : 'Antrenmana Başla'}
+              Antrenmana Başla
             </Button>
           )}
 
-          {hasActiveSession && !isActiveForSelected && (
+          {hasActiveSession && !isActiveForSelected && !editMode && (
             <p className="text-[10px] text-text-muted text-center mt-2">
               Devam eden antrenmanı bitirin veya bırakın
             </p>
