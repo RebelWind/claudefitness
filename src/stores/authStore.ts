@@ -6,7 +6,7 @@ import { useProgramStore } from './programStore';
 import { useProgramDetailsStore } from './programDetailsStore';
 import { getUserProgram } from '../lib/programService';
 import { getBaslangicDetails } from '../lib/n8nService';
-import { exerciseIdFromSearchKey } from '../constants/exerciseMapping';
+import { EXERCISE_EXCEL_MAPPING } from '../constants/exerciseMapping';
 import type { ExerciseBaseline } from '../types/user';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
@@ -79,17 +79,16 @@ export const useAuthStore = create<AuthState>()((set) => ({
           // Re-create local program structure
           useProgramStore.getState().initializeProgram(backendProgram.created_at);
 
-          // Restore baselines from Google Sheets
+          // Restore baselines from Google Sheets (per-group)
           try {
             const details = await getBaslangicDetails(backendProgram.google_file_id);
             const baselines: ExerciseBaseline[] = [];
-            const seen = new Set<string>();
             for (const input of details.inputs) {
-              const exerciseId = exerciseIdFromSearchKey(input.search_key);
-              if (exerciseId && !seen.has(exerciseId)) {
-                seen.add(exerciseId);
+              const mapping = EXERCISE_EXCEL_MAPPING.find(m => m.search_key === input.search_key);
+              if (mapping) {
                 baselines.push({
-                  exerciseId,
+                  group: mapping.grup,
+                  exerciseId: mapping.exerciseId,
                   initialWeightKg: input.agirlik,
                   initialReps: input['tekrar sayisi'],
                 });

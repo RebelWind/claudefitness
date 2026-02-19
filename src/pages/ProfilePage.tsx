@@ -4,7 +4,9 @@ import { useAuthStore } from '../stores/authStore';
 import { useUserStore } from '../stores/userStore';
 import { useWorkoutStore } from '../stores/workoutStore';
 import { useProgramStore } from '../stores/programStore';
-import { EXERCISES } from '../constants/exercises';
+import { EXERCISES, GROUP_LABELS, GROUP_COLORS } from '../constants/exercises';
+import type { ExerciseGroup } from '../types/exercise';
+import Badge from '../components/ui/Badge';
 import Header from '../components/layout/Header';
 import PageContainer from '../components/layout/PageContainer';
 import Card from '../components/ui/Card';
@@ -83,23 +85,44 @@ export default function ProfilePage() {
           </div>
         </Card>
 
-        {/* Baselines */}
-        <Card className="mb-4">
-          <h3 className="font-bold text-text mb-3">Başlangıç Değerleri</h3>
-          <div className="flex flex-col gap-2">
-            {baselines.map(b => (
-              <div key={b.exerciseId} className="flex justify-between text-sm">
-                <span className="text-text-muted">{EXERCISES[b.exerciseId].name}</span>
-                <span className="text-text font-medium">
-                  {b.initialWeightKg > 0 && `${b.initialWeightKg}kg - `}
-                  {EXERCISES[b.exerciseId].trackingUnit === 'seconds'
-                    ? `${b.initialReps}sn`
-                    : `${b.initialReps} tekrar`}
-                </span>
+        {/* Baselines grouped by G1-G4 */}
+        {baselines.length > 0 && (() => {
+          const groups = (['G1', 'G2', 'G3', 'G4'] as ExerciseGroup[]).filter(
+            g => baselines.some(b => b.group === g),
+          );
+          return (
+            <Card className="mb-4">
+              <h3 className="font-bold text-text mb-3">Başlangıç Değerleri</h3>
+              <div className="flex flex-col gap-4">
+                {groups.map(g => {
+                  const colors = GROUP_COLORS[g];
+                  const groupBaselines = baselines.filter(b => b.group === g);
+                  return (
+                    <div key={g}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge group={g}>{g}</Badge>
+                        <span className={`text-xs font-medium ${colors.text}`}>{GROUP_LABELS[g]}</span>
+                      </div>
+                      <div className={`flex flex-col gap-1.5 pl-2 border-l-2 ${colors.border}`}>
+                        {groupBaselines.map(b => (
+                          <div key={`${b.group}-${b.exerciseId}`} className="flex justify-between text-sm">
+                            <span className="text-text-muted">{EXERCISES[b.exerciseId].name}</span>
+                            <span className="text-text font-medium">
+                              {b.initialWeightKg > 0 && `${b.initialWeightKg}kg - `}
+                              {EXERCISES[b.exerciseId].trackingUnit === 'seconds'
+                                ? `${b.initialReps}sn`
+                                : `${b.initialReps} tekrar`}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-        </Card>
+            </Card>
+          );
+        })()}
 
         {/* Actions */}
         <div className="flex flex-col gap-3 mb-4">

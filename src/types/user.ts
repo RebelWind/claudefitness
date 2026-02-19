@@ -1,4 +1,4 @@
-import type { ExerciseId } from './exercise';
+import type { ExerciseId, ExerciseGroup } from './exercise';
 
 export interface User {
   id: string;
@@ -11,6 +11,7 @@ export interface User {
 
 export interface ExerciseBaseline {
   exerciseId: ExerciseId;
+  group: ExerciseGroup;
   initialWeightKg: number;
   initialReps: number;
 }

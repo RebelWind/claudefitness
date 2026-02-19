@@ -166,6 +166,7 @@ export default function InitialSetupPage() {
     exerciseIds.forEach(exId => {
       const input = inputs[inputKey(currentGroup, exId)];
       updateBaseline(
+        currentGroup,
         exId,
         Number(input.weight) || 0,
         Number(input.reps) || 0,
