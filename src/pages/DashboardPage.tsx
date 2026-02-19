@@ -1,10 +1,13 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useUserStore } from '../stores/userStore';
 import { useWorkoutStore } from '../stores/workoutStore';
 import { useProgramStore } from '../stores/programStore';
 import { getCurrentWeek, getNextWorkout, getCompletedWorkoutCount } from '../lib/programScheduler';
-import { WORKOUT_TEMPLATES } from '../constants/workouts';
-import { EXERCISES, GROUP_COLORS } from '../constants/exercises';
+import { getProgramDetails } from '../lib/n8nService';
+import type { ProgramExercise } from '../lib/n8nService';
+import { getUserProgram } from '../lib/programService';
+import { supabase } from '../lib/supabase';
 import Header from '../components/layout/Header';
 import PageContainer from '../components/layout/PageContainer';
 import Card from '../components/ui/Card';
@@ -15,11 +18,14 @@ import ProgressBar from '../components/ui/ProgressBar';
 export default function DashboardPage() {
   const navigate = useNavigate();
   const user = useUserStore(s => s.user);
-  const baselines = useUserStore(s => s.baselines);
   const logs = useWorkoutStore(s => s.logs);
-  const startWorkout = useWorkoutStore(s => s.startWorkout);
+  const startWorkoutFromProgram = useWorkoutStore(s => s.startWorkoutFromProgram);
   const activeSession = useWorkoutStore(s => s.activeSession);
   const program = useProgramStore(s => s.program);
+
+  const [programExercises, setProgramExercises] = useState<ProgramExercise[]>([]);
+  const [loadingProgram, setLoadingProgram] = useState(false);
+  const [programError, setProgramError] = useState('');
 
   const currentWeek = program?.startDate
     ? getCurrentWeek(program.startDate)
@@ -34,16 +40,55 @@ export default function DashboardPage() {
   const thisWeekLogs = logs.filter(l => l.weekNumber === currentWeek && l.completedAt);
   const completedThisWeek = thisWeekLogs.length;
 
+  // Fetch program details from Excel for current week
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchProgram() {
+      setLoadingProgram(true);
+      setProgramError('');
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = session?.user?.id;
+        if (!userId) return;
+
+        const userProgram = await getUserProgram(userId);
+        if (!userProgram?.google_file_id) return;
+
+        const data = await getProgramDetails(
+          userProgram.google_file_id,
+          `Hafta ${currentWeek}`,
+        );
+        if (!cancelled) setProgramExercises(data);
+      } catch (err) {
+        console.error('Program detayları alınamadı:', err);
+        if (!cancelled) setProgramError('Program verileri yüklenemedi.');
+      } finally {
+        if (!cancelled) setLoadingProgram(false);
+      }
+    }
+    fetchProgram();
+    return () => { cancelled = true; };
+  }, [currentWeek]);
+
   const handleStartWorkout = () => {
     if (activeSession) {
       navigate(`/workout/${activeSession.workoutType}`);
       return;
     }
-    if (nextWorkout) {
-      startWorkout(nextWorkout.type, nextWorkout.weekNumber, nextWorkout.dayInWeek, baselines);
+    if (nextWorkout && programExercises.length > 0) {
+      startWorkoutFromProgram(
+        nextWorkout.type,
+        nextWorkout.weekNumber,
+        nextWorkout.dayInWeek,
+        programExercises,
+      );
       navigate(`/workout/${nextWorkout.type}`);
     }
   };
+
+  // Filter exercises for the next workout type
+  const nextWorkoutGroup = nextWorkout ? `W${nextWorkout.type}` : '';
+  const nextWorkoutExercises = programExercises.filter(e => e.grup === nextWorkoutGroup);
 
   return (
     <>
@@ -97,27 +142,38 @@ export default function DashboardPage() {
                   Hafta {nextWorkout.weekNumber} - Gün {nextWorkout.dayInWeek}
                 </p>
               </div>
-              <Badge variant="accent">{WORKOUT_TEMPLATES[nextWorkout.type].exercises.length} hareket</Badge>
+              <Badge variant="accent">{nextWorkoutExercises.length} hareket</Badge>
             </div>
 
-            <div className="flex flex-col gap-1.5 mb-4">
-              {WORKOUT_TEMPLATES[nextWorkout.type].exercises.map(exId => {
-                const ex = EXERCISES[exId];
-                const dotColor = GROUP_COLORS[ex.group].dot;
-                return (
-                  <div key={exId} className="flex items-center gap-2 text-sm">
-                    <div className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
-                    <span className="text-text-muted">{ex.name}</span>
-                    <span className={`text-[10px] ${GROUP_COLORS[ex.group].text}`}>{ex.group}</span>
+            {loadingProgram && (
+              <p className="text-sm text-primary-light text-center animate-pulse py-4">
+                Program yükleniyor...
+              </p>
+            )}
+
+            {programError && (
+              <p className="text-sm text-error text-center py-2">{programError}</p>
+            )}
+
+            {!loadingProgram && nextWorkoutExercises.length > 0 && (
+              <div className="flex flex-col gap-1.5 mb-4">
+                {nextWorkoutExercises.map(pe => (
+                  <div key={pe.search_key} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary-light" />
+                      <span className="text-text-muted">{pe.egzersiz_adi}</span>
+                    </div>
+                    <span className="text-xs text-text-muted">{pe.set_x_tekrar}</span>
                   </div>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            )}
 
             <Button
               fullWidth
               size="lg"
               onClick={handleStartWorkout}
+              disabled={loadingProgram || programExercises.length === 0}
             >
               {activeSession ? 'Antrenmana Devam Et' : 'Antrenmana Başla'}
             </Button>

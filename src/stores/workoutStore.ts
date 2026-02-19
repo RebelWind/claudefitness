@@ -1,20 +1,24 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { WorkoutType, ExerciseId } from '../types/exercise';
+import type { WorkoutType } from '../types/exercise';
 import type { ActiveWorkoutSession, WorkoutLog, ExerciseLog } from '../types/workout';
-import type { ExerciseBaseline } from '../types/user';
-import { WORKOUT_TEMPLATES } from '../constants/workouts';
-import { EXERCISES } from '../constants/exercises';
-import { calculateWeightForWeek } from '../lib/weightCalculator';
+import type { ProgramExercise } from '../lib/n8nService';
+import { exerciseIdFromSearchKey } from '../constants/exerciseMapping';
+
+/** Parse "4x5+" → 4, "3x10" → 3, "3xmax" → 3 */
+function parseSetCount(setxTekrar: string): number {
+  const match = setxTekrar.match(/^(\d+)x/);
+  return match ? parseInt(match[1]) : 3;
+}
 
 interface WorkoutState {
   activeSession: ActiveWorkoutSession | null;
   logs: WorkoutLog[];
-  startWorkout: (
+  startWorkoutFromProgram: (
     type: WorkoutType,
     weekNumber: number,
     dayInWeek: 1 | 2 | 3,
-    baselines: ExerciseBaseline[],
+    programExercises: ProgramExercise[],
   ) => void;
   updateSet: (exerciseIndex: number, setIndex: number, reps: number) => void;
   completeExercise: (exerciseIndex: number) => void;
@@ -31,20 +35,24 @@ export const useWorkoutStore = create<WorkoutState>()(
       activeSession: null,
       logs: [],
 
-      startWorkout: (type, weekNumber, dayInWeek, baselines) => {
-        const template = WORKOUT_TEMPLATES[type];
-        const exercises: ExerciseLog[] = template.exercises.map((exId: ExerciseId) => {
-          const exercise = EXERCISES[exId];
-          const baseline = baselines.find(b => b.exerciseId === exId);
-          const weight = baseline
-            ? calculateWeightForWeek(baseline, exercise, weekNumber)
-            : 0;
+      startWorkoutFromProgram: (type, weekNumber, dayInWeek, programExercises) => {
+        const workoutGroup = `W${type}`;
+        const filtered = programExercises.filter(e => e.grup === workoutGroup);
+
+        const exercises: ExerciseLog[] = filtered.map(pe => {
+          const exId = exerciseIdFromSearchKey(pe.search_key);
+          const setCount = parseSetCount(pe.set_x_tekrar);
 
           return {
-            exerciseId: exId,
-            weightKg: weight,
-            sets: Array(exercise.defaultSets).fill(0),
+            exerciseId: exId || ('bench_press' as any),
+            weightKg: 0,
+            sets: Array(setCount).fill(0),
             completed: false,
+            searchKey: pe.search_key,
+            exerciseName: pe.egzersiz_adi,
+            targetSetsTekrar: pe.set_x_tekrar,
+            rpe: pe.rpe,
+            warmupSets: pe.isinma_setleri,
           };
         });
 

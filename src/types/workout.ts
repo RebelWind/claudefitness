@@ -5,6 +5,12 @@ export interface ExerciseLog {
   weightKg: number;
   sets: number[];
   completed: boolean;
+  // Fields from Excel program data
+  searchKey?: string;
+  exerciseName?: string;
+  targetSetsTekrar?: string;
+  rpe?: number | null;
+  warmupSets?: number[] | null;
 }
 
 export interface WorkoutLog {

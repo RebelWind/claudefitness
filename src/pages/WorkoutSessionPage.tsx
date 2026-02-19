@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import { useWorkoutStore } from '../stores/workoutStore';
 import { useProgramStore } from '../stores/programStore';
 import { EXERCISES } from '../constants/exercises';
+import type { ExerciseLog } from '../types/workout';
 import Header from '../components/layout/Header';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
@@ -66,12 +67,13 @@ export default function WorkoutSessionPage() {
 
   if (!activeSession) return null;
 
-  const currentExercise = activeSession.exercises[activeSession.currentExerciseIndex];
+  const currentExercise: ExerciseLog = activeSession.exercises[activeSession.currentExerciseIndex];
   const exerciseInfo = EXERCISES[currentExercise.exerciseId];
+  const displayName = currentExercise.exerciseName || exerciseInfo?.name || 'Egzersiz';
   const progress = ((activeSession.currentExerciseIndex + 1) / activeSession.exercises.length) * 100;
   const isLastExercise = activeSession.currentExerciseIndex === activeSession.exercises.length - 1;
 
-  const restDuration = exerciseInfo.group === 'G1' || exerciseInfo.group === 'G2' ? 90 : 60;
+  const restDuration = exerciseInfo?.group === 'G1' || exerciseInfo?.group === 'G2' ? 90 : 60;
 
   const handleSetComplete = (setIdx: number, reps: number) => {
     updateSet(activeSession.currentExerciseIndex, setIdx, reps);
@@ -151,19 +153,43 @@ export default function WorkoutSessionPage() {
             {/* Exercise Card */}
             <Card className="mb-4">
               <div className="flex justify-between items-start mb-1">
-                <h2 className="text-xl font-bold text-text">{exerciseInfo.name}</h2>
-                <Badge group={exerciseInfo.group}>{exerciseInfo.group}</Badge>
+                <h2 className="text-xl font-bold text-text">{displayName}</h2>
+                {exerciseInfo?.group && (
+                  <Badge group={exerciseInfo.group}>{exerciseInfo.group}</Badge>
+                )}
               </div>
-              {exerciseInfo.usesWeight && (
-                <p className="text-primary-light font-semibold text-lg mb-4">
-                  {currentExercise.weightKg} kg
-                </p>
-              )}
-              {!exerciseInfo.usesWeight && exerciseInfo.trackingUnit === 'seconds' && (
-                <p className="text-text-muted text-sm mb-4">Süre (saniye)</p>
+
+              {/* Target info from Excel */}
+              <div className="flex items-center gap-3 mb-3">
+                {currentExercise.targetSetsTekrar && (
+                  <span className="text-primary-light font-semibold text-lg">
+                    {currentExercise.targetSetsTekrar}
+                  </span>
+                )}
+                {currentExercise.rpe !== null && currentExercise.rpe !== undefined && (
+                  <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full font-semibold">
+                    RPE {currentExercise.rpe}
+                  </span>
+                )}
+              </div>
+
+              {/* Warmup sets */}
+              {currentExercise.warmupSets && currentExercise.warmupSets.length > 0 && (
+                <div className="bg-surface-light/50 rounded-xl p-3 mb-4">
+                  <p className="text-xs text-text-muted font-semibold mb-2">Isınma Setleri</p>
+                  <div className="flex gap-2">
+                    {currentExercise.warmupSets.map((w, i) => (
+                      <div key={i} className="flex-1 text-center bg-background rounded-lg py-1.5">
+                        <div className="text-xs text-text-muted">Set {i + 1}</div>
+                        <div className="text-sm font-bold text-text">{w} kg</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
 
-              {/* Sets */}
+              {/* Working Sets */}
+              <p className="text-xs text-text-muted font-semibold mb-2">Çalışma Setleri</p>
               <div className="flex flex-col gap-3">
                 {currentExercise.sets.map((reps, setIdx) => (
                   <div key={setIdx} className="flex items-center gap-3">
@@ -201,7 +227,7 @@ export default function WorkoutSessionPage() {
                       </button>
                     </div>
                     <div className="w-10 text-xs text-text-muted text-right">
-                      {exerciseInfo.trackingUnit === 'seconds' ? 'sn' : 'rep'}
+                      {exerciseInfo?.trackingUnit === 'seconds' ? 'sn' : 'rep'}
                     </div>
                   </div>
                 ))}

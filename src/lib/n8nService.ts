@@ -115,6 +115,39 @@ export async function getBaslangicDetails(
   return Array.isArray(data) ? data[0] : data;
 }
 
+export interface ProgramExercise {
+  grup: string;
+  egzersiz_adi: string;
+  set_x_tekrar: string;
+  rpe: number | null;
+  isinma_setleri: number[] | null;
+  search_key: string;
+}
+
+export async function getProgramDetails(
+  googleFileId: string,
+  hafta: string,
+): Promise<ProgramExercise[]> {
+  const response = await fetch(N8N_WEBHOOK_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${N8N_WEBHOOK_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      action: 'getProgramDetails',
+      google_file_id: googleFileId,
+      hafta,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`getProgramDetails webhook hatası: ${response.status}`);
+  }
+
+  return response.json();
+}
+
 export async function insertBaslangic(
   googleFileId: string,
   kilo: number,

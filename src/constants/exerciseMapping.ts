@@ -38,3 +38,31 @@ export const EXERCISE_EXCEL_MAPPING: ExerciseExcelMapping[] = [
 export function getExcelMapping(group: ExerciseGroup, exerciseId: ExerciseId): ExerciseExcelMapping | undefined {
   return EXERCISE_EXCEL_MAPPING.find(m => m.grup === group && m.exerciseId === exerciseId);
 }
+
+/**
+ * Maps the slug part of a search_key (after the dash) to an ExerciseId.
+ * Works for both setup keys (g1-benchpress) and program keys (wa-benchpress).
+ */
+const SLUG_TO_EXERCISE_ID: Record<string, ExerciseId> = {
+  'benchpress': 'bench_press',
+  'squat': 'squat',
+  'overheadpress': 'overhead_press',
+  'shoulderpressmachine': 'shoulder_press_machine',
+  'romaniandl': 'romanian_dl',
+  'barbellrow': 'barbell_row',
+  'pullups': 'assisted_pull_ups',
+  'lateralraises': 'lateral_raises',
+  'latpulldown': 'lat_pulldown',
+  'chestflymachine': 'chest_fly_machine',
+  'legextension': 'leg_extension',
+  'overheadtricepsextension': 'overhead_triceps_extension',
+  'inclinedumbbellcurl': 'incline_dumbbell_curl',
+  'crunch': 'crunch',
+  'legraises': 'leg_raises',
+  'plank': 'plank',
+};
+
+export function exerciseIdFromSearchKey(searchKey: string): ExerciseId | undefined {
+  const slug = searchKey.split('-').slice(1).join('-');
+  return SLUG_TO_EXERCISE_ID[slug];
+}
