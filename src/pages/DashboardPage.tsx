@@ -43,6 +43,7 @@ export default function DashboardPage() {
   const [selectedWorkout, setSelectedWorkout] = useState<WorkoutType>('A');
   const [editMode, setEditMode] = useState(false);
   const [editSets, setEditSets] = useState<Record<string, number[]>>({});
+  const [editWeights, setEditWeights] = useState<Record<string, number>>({});
   const [isSaving, setIsSaving] = useState(false);
 
   const totalCompleted = getCompletedWorkoutCount(logs);
@@ -98,12 +99,12 @@ export default function DashboardPage() {
     [selectedWeekLogs, selectedWorkout],
   );
 
-  // Map search_key → logged sets for quick lookup
-  const loggedSetsMap = useMemo(() => {
+  // Map search_key → { sets, weightKg } for quick lookup
+  const loggedDataMap = useMemo(() => {
     if (!completedLog) return {};
-    const map: Record<string, number[]> = {};
+    const map: Record<string, { sets: number[]; weightKg: number }> = {};
     for (const ex of completedLog.exercises) {
-      if (ex.searchKey) map[ex.searchKey] = ex.sets;
+      if (ex.searchKey) map[ex.searchKey] = { sets: ex.sets, weightKg: ex.weightKg };
     }
     return map;
   }, [completedLog]);
@@ -112,11 +113,19 @@ export default function DashboardPage() {
   useEffect(() => {
     setEditMode(false);
     setEditSets({});
+    setEditWeights({});
   }, [selectedWeek, selectedWorkout]);
 
   const handleStartEdit = () => {
     // Populate edit state from the logged data
-    setEditSets({ ...loggedSetsMap });
+    const sets: Record<string, number[]> = {};
+    const weights: Record<string, number> = {};
+    for (const [key, data] of Object.entries(loggedDataMap)) {
+      sets[key] = [...data.sets];
+      weights[key] = data.weightKg;
+    }
+    setEditSets(sets);
+    setEditWeights(weights);
     setEditMode(true);
   };
 
@@ -149,9 +158,9 @@ export default function DashboardPage() {
 
       await insertProgram(googleFileId, `Hafta ${selectedWeek}`, inputs);
 
-      // Update local log
+      // Update local log (sets + weights)
       for (const [key, sets] of Object.entries(editSets)) {
-        updateLogSets(completedLog.id, key, sets);
+        updateLogSets(completedLog.id, key, sets, editWeights[key]);
       }
       setEditMode(false);
     } catch (err) {
@@ -297,7 +306,7 @@ export default function DashboardPage() {
           {workoutExercises.length > 0 && (
             <div className="flex flex-col gap-1 mb-4">
               {workoutExercises.map(pe => {
-                const loggedSets = loggedSetsMap[pe.search_key];
+                const loggedData = loggedDataMap[pe.search_key];
                 const editingSets = editSets[pe.search_key];
 
                 return (
@@ -305,7 +314,7 @@ export default function DashboardPage() {
                     {/* Exercise header row */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className={`w-1.5 h-1.5 rounded-full ${loggedSets ? 'bg-success' : 'bg-primary-light'}`} />
+                        <div className={`w-1.5 h-1.5 rounded-full ${loggedData ? 'bg-success' : 'bg-primary-light'}`} />
                         <span className="text-sm text-text">{pe.egzersiz_adi}</span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -318,11 +327,16 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
-                    {/* Logged sets display (when workout is done and NOT editing) */}
-                    {loggedSets && !editMode && (
-                      <div className="flex items-center gap-1.5 mt-1 ml-3.5">
-                        <span className="text-[10px] text-text-muted">Tekrar:</span>
-                        {loggedSets.map((reps, i) => (
+                    {/* Logged data display (when workout is done and NOT editing) */}
+                    {loggedData && !editMode && (
+                      <div className="flex items-center gap-2 mt-1 ml-3.5">
+                        {loggedData.weightKg > 0 && (
+                          <span className="text-xs font-semibold text-primary-light bg-primary/10 px-1.5 py-0.5 rounded">
+                            {loggedData.weightKg} kg
+                          </span>
+                        )}
+                        <span className="text-[10px] text-text-muted">&#xd7;</span>
+                        {loggedData.sets.map((reps, i) => (
                           <span key={i} className="text-xs font-semibold text-success bg-success/10 px-1.5 py-0.5 rounded">
                             {reps}
                           </span>
@@ -330,21 +344,38 @@ export default function DashboardPage() {
                       </div>
                     )}
 
-                    {/* Editable sets (when in edit mode) */}
+                    {/* Editable fields (when in edit mode) */}
                     {editMode && editingSets && (
-                      <div className="flex items-center gap-1.5 mt-1.5 ml-3.5">
-                        <span className="text-[10px] text-text-muted">Set:</span>
-                        {editingSets.map((reps, i) => (
+                      <div className="flex flex-col gap-1.5 mt-1.5 ml-3.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-text-muted w-7">kg:</span>
                           <input
-                            key={i}
                             type="number"
-                            inputMode="numeric"
-                            value={reps || ''}
-                            onChange={e => handleEditSetValue(pe.search_key, i, parseInt(e.target.value) || 0)}
-                            className="w-12 h-7 text-center text-xs font-bold rounded-lg bg-background
+                            inputMode="decimal"
+                            step="0.5"
+                            value={editWeights[pe.search_key] || ''}
+                            onChange={e => setEditWeights(prev => ({
+                              ...prev,
+                              [pe.search_key]: parseFloat(e.target.value) || 0,
+                            }))}
+                            className="w-16 h-7 text-center text-xs font-bold rounded-lg bg-background
                               border border-surface-light text-text focus:outline-none focus:border-primary-light"
                           />
-                        ))}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-text-muted w-7">Set:</span>
+                          {editingSets.map((reps, i) => (
+                            <input
+                              key={i}
+                              type="number"
+                              inputMode="numeric"
+                              value={reps || ''}
+                              onChange={e => handleEditSetValue(pe.search_key, i, parseInt(e.target.value) || 0)}
+                              className="w-12 h-7 text-center text-xs font-bold rounded-lg bg-background
+                                border border-surface-light text-text focus:outline-none focus:border-primary-light"
+                            />
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -368,7 +399,7 @@ export default function DashboardPage() {
               <Button
                 variant="secondary"
                 className="flex-1"
-                onClick={() => { setEditMode(false); setEditSets({}); }}
+                onClick={() => { setEditMode(false); setEditSets({}); setEditWeights({}); }}
                 disabled={isSaving}
               >
                 İptal
