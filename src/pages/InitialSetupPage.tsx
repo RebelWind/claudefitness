@@ -208,11 +208,6 @@ export default function InitialSetupPage() {
 
       setStatusMsg('');
       setSubmitting(false);
-      // Save body weight before completing setup
-      const currentUser = useUserStore.getState().user;
-      if (currentUser) {
-        useUserStore.getState().setUser({ ...currentUser, bodyWeightKg: Number(bodyWeight) || 0 });
-      }
       completeSetup();
       initializeProgram(new Date().toISOString());
       navigate('/dashboard', { replace: true });
@@ -228,11 +223,6 @@ export default function InitialSetupPage() {
   const isLastGroup = currentGroupIdx === groupKeys.length - 1;
 
   const handleCompleteSummary = async () => {
-    // Save body weight to user profile before completing setup
-    const currentUser = useUserStore.getState().user;
-    if (currentUser) {
-      useUserStore.getState().setUser({ ...currentUser, bodyWeightKg: Number(bodyWeight) || 0 });
-    }
     completeSetup();
     initializeProgram(new Date().toISOString());
 

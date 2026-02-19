@@ -50,6 +50,7 @@ export const useWorkoutStore = create<WorkoutState>()(
           return {
             exerciseId: exId || ('bench_press' as any),
             weightKg: typeof pe.kg === 'number' ? pe.kg : Number(pe.kg) || 0,
+            weightLabel: typeof pe.kg === 'string' && isNaN(Number(pe.kg)) ? pe.kg : undefined,
             sets: Array(setCount).fill(0),
             completed: false,
             searchKey: pe.search_key,

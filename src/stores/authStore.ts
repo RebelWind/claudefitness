@@ -97,14 +97,6 @@ async function restoreFromN8n(
     }
     userStore.setBaselines(baselines);
 
-    // Restore body weight from n8n response
-    if (details.kilo > 0) {
-      const currentUser = userStore.user;
-      if (currentUser) {
-        userStore.setUser({ ...currentUser, bodyWeightKg: details.kilo });
-      }
-    }
-
     // Backfill to Supabase
     saveBaselines(supabaseUser.id, baselines).catch(() => {});
   } catch { /* ignore */ }
@@ -137,6 +129,7 @@ async function restoreFromN8n(
           return {
             exerciseId: exerciseIdFromSearchKey(pe.search_key) || 'bench_press' as any,
             weightKg: typeof pe.kg === 'number' ? pe.kg : Number(pe.kg) || 0,
+            weightLabel: typeof pe.kg === 'string' && isNaN(Number(pe.kg)) ? pe.kg : undefined,
             sets: allSets.slice(0, setCount),
             completed: true,
             searchKey: pe.search_key,
@@ -241,7 +234,6 @@ export const useAuthStore = create<AuthState>()((set) => ({
           createdAt: user.created_at,
           hasCompletedSetup: true,
           programStartDate: backendProgram.created_at,
-          bodyWeightKg: userStore.user?.bodyWeightKg || 0,
         });
 
         useProgramStore.getState().initializeProgram(backendProgram.created_at);
@@ -261,7 +253,6 @@ export const useAuthStore = create<AuthState>()((set) => ({
           createdAt: user.created_at,
           hasCompletedSetup: false,
           programStartDate: null,
-          bodyWeightKg: 0,
         });
       }
       set({ isLoading: false });

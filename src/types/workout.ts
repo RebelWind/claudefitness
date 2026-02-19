@@ -3,6 +3,8 @@ import type { ExerciseId, WorkoutType } from './exercise';
 export interface ExerciseLog {
   exerciseId: ExerciseId;
   weightKg: number;
+  /** Raw kg label from Excel (e.g. "vücut a." for bodyweight exercises) */
+  weightLabel?: string;
   sets: number[];
   completed: boolean;
   // Fields from Excel program data

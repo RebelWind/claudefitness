@@ -31,7 +31,6 @@ export default function ProfilePage() {
   const [showResetModal, setShowResetModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [editBodyWeight, setEditBodyWeight] = useState(0);
 
   // Edit state: group-exerciseId → { kg, reps }
   const [editValues, setEditValues] = useState<Record<string, { kg: number; reps: number }>>({});
@@ -65,7 +64,6 @@ export default function ProfilePage() {
       };
     }
     setEditValues(values);
-    setEditBodyWeight(user?.bodyWeightKg || 0);
     setEditMode(true);
   };
 
@@ -89,11 +87,6 @@ export default function ProfilePage() {
         }
       }
 
-      // Save body weight to user profile
-      if (user && editBodyWeight !== user.bodyWeightKg) {
-        useUserStore.getState().setUser({ ...user, bodyWeightKg: editBodyWeight });
-      }
-
       // Build n8n payload from edited values
       if (googleFileId) {
         const inputs: BaslangicInput[] = [];
@@ -112,7 +105,7 @@ export default function ProfilePage() {
         }
         if (inputs.length > 0) {
           // Wait for Excel to be updated before invalidating cache
-          await insertBaslangic(googleFileId, editBodyWeight, inputs);
+          await insertBaslangic(googleFileId, 0, inputs);
 
           // Excel recalculated — clear cached weekly programs so workouts fetch fresh data
           useProgramDetailsStore.setState({ weeklyPrograms: {} });
@@ -212,29 +205,6 @@ export default function ProfilePage() {
                   </div>
                 )}
               </div>
-              {/* Body Weight */}
-              <div className="flex items-center justify-between py-2 mb-2 border-b border-surface-light">
-                <span className="text-sm text-text-muted">Vücut Ağırlığı</span>
-                {editMode ? (
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      step="0.5"
-                      value={editBodyWeight || ''}
-                      onChange={e => setEditBodyWeight(parseFloat(e.target.value) || 0)}
-                      className="w-20 h-9 text-center text-sm font-bold rounded-lg bg-background
-                        border border-surface-light text-text focus:outline-none focus:border-primary-light"
-                    />
-                    <span className="text-xs text-text-muted">kg</span>
-                  </div>
-                ) : (
-                  <span className="text-sm text-text font-medium">
-                    {user?.bodyWeightKg ? `${user.bodyWeightKg} kg` : '—'}
-                  </span>
-                )}
-              </div>
-
               <div className="flex flex-col gap-4">
                 {groups.map(g => {
                   const colors = GROUP_COLORS[g];
