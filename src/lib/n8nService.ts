@@ -75,22 +75,20 @@ export interface BaslangicInput {
   excel_satir_no: number;
 }
 
-export interface BaslangicEgzersiz {
-  Egzersiz_Adi: string;
-  Set_Tekrar: string;
-  Baslangic_Agirligi: number | string;
-  Haftalik_Artis: number;
-  RPE: number | string;
-}
-
-export interface BaslangicGrup {
-  Grup_Adi: string;
-  Egzersizler: BaslangicEgzersiz[];
+export interface BaslangicDetailInput {
+  search_key: string;
+  agirlik: number;
+  'tekrar sayisi': number;
+  '1 tekrar max': number;
+  'baslangic agirliklari': number;
+  'haftalik artis': number;
+  RPE: number | null;
+  'set x tekrar sayilari': string;
 }
 
 export interface BaslangicDetailsResponse {
-  Kullanici_Bilgileri: { Vucut_Agirligi: number };
-  Program_Detayi: BaslangicGrup[];
+  kilo: number;
+  inputs: BaslangicDetailInput[];
 }
 
 export async function getBaslangicDetails(

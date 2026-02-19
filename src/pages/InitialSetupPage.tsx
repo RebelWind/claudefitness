@@ -5,7 +5,7 @@ import { useProgramStore } from '../stores/programStore';
 import { EXERCISE_GROUPS, GROUP_LABELS, GROUP_COLORS, EXERCISES, SETUP_SKIP_EXERCISES } from '../constants/exercises';
 import { getExcelMapping } from '../constants/exerciseMapping';
 import { insertBaslangic, getBaslangicDetails } from '../lib/n8nService';
-import type { BaslangicInput, BaslangicDetailsResponse } from '../lib/n8nService';
+import type { BaslangicInput, BaslangicDetailsResponse, BaslangicDetailInput } from '../lib/n8nService';
 import { EXERCISE_EXCEL_MAPPING } from '../constants/exerciseMapping';
 import { getUserProgram } from '../lib/programService';
 import { supabase } from '../lib/supabase';
@@ -33,6 +33,7 @@ export default function InitialSetupPage() {
   const [submitting, setSubmitting] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
   const [verifyError, setVerifyError] = useState<string[] | null>(null);
+  const [summaryData, setSummaryData] = useState<BaslangicDetailsResponse | null>(null);
 
   // Key inputs by "groupKey-exerciseId" to handle duplicates across groups
   const [inputs, setInputs] = useState<Record<string, ExerciseInput>>(() => {
@@ -127,39 +128,32 @@ export default function InitialSetupPage() {
     const mismatches: string[] = [];
 
     // Verify body weight
-    if (remote.Kullanici_Bilgileri.Vucut_Agirligi !== enteredBodyWeight) {
+    if (remote.kilo !== enteredBodyWeight) {
       mismatches.push(
-        `Vücut Ağırlığı: Girilen ${enteredBodyWeight}kg → Excel'de ${remote.Kullanici_Bilgileri.Vucut_Agirligi}kg`,
+        `Vücut Ağırlığı: Girilen ${enteredBodyWeight}kg → Excel'de ${remote.kilo}kg`,
       );
     }
 
-    // Build lookup: "G1|Bench Press" → Baslangic_Agirligi
-    const remoteMap = new Map<string, number | string>();
-    for (const grup of remote.Program_Detayi) {
-      for (const ex of grup.Egzersizler) {
-        remoteMap.set(`${grup.Grup_Adi}|${ex.Egzersiz_Adi}`, ex.Baslangic_Agirligi);
-      }
+    // Build lookup by search_key
+    const remoteMap = new Map<string, BaslangicDetailInput>();
+    for (const input of remote.inputs) {
+      remoteMap.set(input.search_key, input);
     }
 
     // Compare each sent exercise
     for (const sent of sentInputs) {
+      const remoteInput = remoteMap.get(sent.search_key);
       const mapping = EXERCISE_EXCEL_MAPPING.find(m => m.search_key === sent.search_key);
-      if (!mapping) continue;
+      const label = mapping ? `${mapping.egzersiz_adi} (${mapping.grup})` : sent.search_key;
 
-      const lookupKey = `${mapping.grup}|${mapping.egzersiz_adi}`;
-      const remoteWeight = remoteMap.get(lookupKey);
-
-      if (remoteWeight === undefined) {
-        mismatches.push(`${mapping.egzersiz_adi} (${mapping.grup}): Excel'de bulunamadı`);
+      if (!remoteInput) {
+        mismatches.push(`${label}: Excel'de bulunamadı`);
         continue;
       }
 
-      // Skip bodyweight exercises ("vücut a.")
-      if (typeof remoteWeight === 'string') continue;
-
-      if (remoteWeight !== sent.girilen_agirlik) {
+      if (remoteInput['baslangic agirliklari'] !== sent.girilen_agirlik) {
         mismatches.push(
-          `${mapping.egzersiz_adi} (${mapping.grup}): Girilen ${sent.girilen_agirlik}kg → Excel'de ${remoteWeight}kg`,
+          `${label}: Girilen ${sent.girilen_agirlik}kg → Excel'de ${remoteInput['baslangic agirliklari']}kg`,
         );
       }
     }
@@ -199,6 +193,12 @@ export default function InitialSetupPage() {
             setSubmitting(false);
             return;
           }
+
+          // Verification passed — show summary before proceeding
+          setSummaryData(remoteData);
+          setStatusMsg('');
+          setSubmitting(false);
+          return;
         }
       } catch (err) {
         console.error('insertBaslangic / doğrulama hatası:', err);
@@ -219,6 +219,75 @@ export default function InitialSetupPage() {
   };
 
   const isLastGroup = currentGroupIdx === groupKeys.length - 1;
+
+  const handleCompleteSummary = () => {
+    completeSetup();
+    initializeProgram(new Date().toISOString());
+    navigate('/dashboard', { replace: true });
+  };
+
+  // Summary screen after successful verification
+  if (summaryData) {
+    return (
+      <>
+        <Header title="Program Özeti" />
+        <PageContainer noBottomNav>
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
+              <span className="text-3xl text-green-400">✓</span>
+            </div>
+            <h2 className="text-xl font-bold text-text">Veriler Başarıyla Kaydedildi!</h2>
+            <p className="text-sm text-text-muted mt-1">
+              Vücut Ağırlığı: <span className="font-semibold text-text">{summaryData.kilo} kg</span>
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            {summaryData.inputs.map((item) => {
+              const mapping = EXERCISE_EXCEL_MAPPING.find(m => m.search_key === item.search_key);
+              const label = mapping ? mapping.egzersiz_adi : item.search_key;
+              const group = mapping?.grup || '';
+              const groupColor = group ? GROUP_COLORS[group as ExerciseGroup] : null;
+
+              return (
+                <div
+                  key={item.search_key}
+                  className={`bg-surface rounded-xl border p-3 ${groupColor?.border || 'border-surface-light'}`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`font-semibold text-sm ${groupColor?.text || 'text-text'}`}>{label}</span>
+                    {group && <Badge group={group as ExerciseGroup}>{group}</Badge>}
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                    <div className="text-text-muted">Başlangıç Ağırlığı</div>
+                    <div className="text-text font-medium text-right">{item['baslangic agirliklari']} kg</div>
+                    <div className="text-text-muted">Tekrar Sayısı</div>
+                    <div className="text-text font-medium text-right">{item['tekrar sayisi']}</div>
+                    <div className="text-text-muted">1 Tekrar Max</div>
+                    <div className="text-text font-medium text-right">{item['1 tekrar max']} kg</div>
+                    <div className="text-text-muted">Set x Tekrar</div>
+                    <div className="text-text font-medium text-right">{item['set x tekrar sayilari']}</div>
+                    <div className="text-text-muted">Haftalık Artış</div>
+                    <div className="text-text font-medium text-right">{item['haftalik artis']} kg</div>
+                    {item.RPE !== null && (
+                      <>
+                        <div className="text-text-muted">RPE</div>
+                        <div className="text-text font-medium text-right">{item.RPE}</div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <Button onClick={handleCompleteSummary} className="w-full mt-6 mb-4">
+            Dashboard'a Git
+          </Button>
+        </PageContainer>
+      </>
+    );
+  }
 
   return (
     <>
