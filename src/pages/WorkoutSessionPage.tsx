@@ -82,6 +82,38 @@ export default function WorkoutSessionPage() {
 
   const restDuration = exerciseInfo?.group === 'G1' || exerciseInfo?.group === 'G2' ? 90 : 60;
 
+  // Returns max allowed reps for a given set index, or null if unlimited
+  const getMaxReps = (setIdx: number): number | null => {
+    const target = currentExercise.targetSetsTekrar || '';
+    const tekrar = target.split('x')[1] || '';
+
+    // "3xmax" → unlimited
+    if (tekrar.toLowerCase() === 'max') return null;
+
+    // "4x5+" → last set unlimited, others capped at 5
+    if (tekrar.endsWith('+')) {
+      const cap = parseInt(tekrar);
+      if (setIdx === currentExercise.sets.length - 1) return null;
+      return cap || null;
+    }
+
+    // "3x10-14" → capped at 14
+    if (tekrar.includes('-')) {
+      const upper = parseInt(tekrar.split('-')[1]);
+      return upper || null;
+    }
+
+    // "3x10" → capped at 10
+    const cap = parseInt(tekrar);
+    return cap || null;
+  };
+
+  const clampReps = (setIdx: number, value: number): number => {
+    const max = getMaxReps(setIdx);
+    if (max !== null && value > max) return max;
+    return Math.max(0, value);
+  };
+
   const handleSetComplete = (setIdx: number, reps: number) => {
     updateSet(activeSession.currentExerciseIndex, setIdx, reps);
     // Show rest timer after each set (except the last one)
@@ -237,7 +269,11 @@ export default function WorkoutSessionPage() {
               {/* Working Sets */}
               <p className="text-xs text-text-muted font-semibold mb-2">Çalışma Setleri</p>
               <div className="flex flex-col gap-3">
-                {currentExercise.sets.map((reps, setIdx) => (
+                {currentExercise.sets.map((reps, setIdx) => {
+                  const maxReps = getMaxReps(setIdx);
+                  const atMax = maxReps !== null && reps >= maxReps;
+
+                  return (
                   <div key={setIdx} className="flex items-center gap-3">
                     <div className="w-16 text-sm text-text-muted font-medium">
                       Set {setIdx + 1}
@@ -255,8 +291,9 @@ export default function WorkoutSessionPage() {
                           type="number"
                           inputMode="numeric"
                           value={reps || ''}
+                          max={maxReps ?? undefined}
                           onChange={e => {
-                            const val = parseInt(e.target.value) || 0;
+                            const val = clampReps(setIdx, parseInt(e.target.value) || 0);
                             updateSet(activeSession.currentExerciseIndex, setIdx, val);
                           }}
                           placeholder="0"
@@ -265,9 +302,10 @@ export default function WorkoutSessionPage() {
                         />
                       </div>
                       <button
-                        onClick={() => handleSetComplete(setIdx, reps + 1)}
-                        className="w-11 h-11 rounded-xl bg-primary text-white font-bold text-xl
-                          flex items-center justify-center active:bg-primary-dark"
+                        onClick={() => handleSetComplete(setIdx, clampReps(setIdx, reps + 1))}
+                        disabled={atMax}
+                        className={`w-11 h-11 rounded-xl font-bold text-xl flex items-center justify-center
+                          ${atMax ? 'bg-surface-light text-text-muted opacity-40' : 'bg-primary text-white active:bg-primary-dark'}`}
                       >
                         +
                       </button>
@@ -276,7 +314,8 @@ export default function WorkoutSessionPage() {
                       {exerciseInfo?.trackingUnit === 'seconds' ? 'sn' : 'rep'}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </Card>
 
