@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../lib/supabase';
 import { createNewProgram, generateProgramKey } from '../lib/n8nService';
-import { saveUserProgram } from '../lib/programService';
+import { saveUserProgram, getUserProgram } from '../lib/programService';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 
@@ -45,27 +45,33 @@ export default function RegisterPage() {
       return;
     }
 
-    // 2. Create program via n8n webhook
+    // 2. Check if user already has a program, if not create one
     try {
-      setStatusMsg('Program dosyası oluşturuluyor...');
-      const programKey = generateProgramKey();
-      const programName = `${programKey}-SuperHeroDongu`;
-
-      const result = await createNewProgram(programKey);
-
-      // 3. Save to Supabase DB
-      setStatusMsg('Program kaydediliyor...');
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
 
       if (userId) {
-        await saveUserProgram(
-          userId,
-          programKey,
-          programName,
-          result.googleFileId,
-          result.googleFileName,
-        );
+        setStatusMsg('Program kontrol ediliyor...');
+        const existingProgram = await getUserProgram(userId);
+
+        if (!existingProgram) {
+          // No program yet — create via n8n webhook
+          setStatusMsg('Program dosyası oluşturuluyor...');
+          const programKey = generateProgramKey();
+          const programName = `${programKey}-SuperHeroDongu`;
+
+          const result = await createNewProgram(programKey);
+
+          // Save to Supabase DB
+          setStatusMsg('Program kaydediliyor...');
+          await saveUserProgram(
+            userId,
+            programKey,
+            programName,
+            result.googleFileId,
+            result.googleFileName,
+          );
+        }
       }
     } catch (err) {
       // Log but don't block registration — program can be retried later
