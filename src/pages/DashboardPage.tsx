@@ -113,7 +113,7 @@ export default function DashboardPage() {
     return map;
   }, [completedLog]);
 
-  // Map search_key → kg from program data, with baseline fallback
+  // Map search_key → numeric kg from program data, with baseline fallback
   const programKgMap = useMemo(() => {
     const map: Record<string, number> = {};
     for (const pe of workoutExercises) {
@@ -131,6 +131,17 @@ export default function DashboardPage() {
     }
     return map;
   }, [workoutExercises, baselines]);
+
+  // Map search_key → raw string label (e.g. "vücut a.") for non-numeric kg
+  const programLabelMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const pe of workoutExercises) {
+      if (typeof pe.kg === 'string' && pe.kg && isNaN(Number(pe.kg))) {
+        map[pe.search_key] = pe.kg;
+      }
+    }
+    return map;
+  }, [workoutExercises]);
 
   // Heal old logs where weightKg was stored as 0 (pre-fix data)
   const healLogWeights = useWorkoutStore(s => s.healLogWeights);
@@ -350,7 +361,10 @@ export default function DashboardPage() {
               {completedLog.exercises.map((ex, idx) => {
                 const editingSets = editSets[ex.searchKey || ''];
                 const kg = ex.weightKg > 0 ? ex.weightKg : (programKgMap[ex.searchKey || ''] || 0);
-                const kgLabel = ex.weightLabel || (kg > 0 ? `${kg} kg` : '');
+                const kgLabel = ex.weightLabel
+                  || (kg > 0 ? `${kg} kg` : '')
+                  || programLabelMap[ex.searchKey || '']
+                  || '';
                 return (
                   <div key={ex.searchKey || idx} className="py-2">
                     <div className="flex items-center justify-between">
