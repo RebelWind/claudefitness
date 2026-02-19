@@ -4,6 +4,7 @@ import { useUserStore } from './userStore';
 import { useWorkoutStore } from './workoutStore';
 import { useProgramStore } from './programStore';
 import { useProgramDetailsStore } from './programDetailsStore';
+import { getUserProgram } from '../lib/programService';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface AuthState {
@@ -24,17 +25,17 @@ export const useAuthStore = create<AuthState>()((set) => ({
 
   setFromSupabaseUser: (user) => {
     if (user) {
-      set({ userId: user.id, isAuthenticated: true, isLoading: false });
       const userStore = useUserStore.getState();
       const existingUser = userStore.user;
 
+      // Same user logging back in with local data — keep everything
       if (existingUser && existingUser.id === user.id) {
-        // Same user logging back in — keep all data as-is
+        set({ userId: user.id, isAuthenticated: true, isLoading: false });
         return;
       }
 
+      // Different user — clear all stores for clean slate
       if (existingUser && existingUser.id !== user.id) {
-        // Different user — clear all stores for clean slate
         userStore.clear();
         const workoutStore = useWorkoutStore.getState();
         workoutStore.abandonWorkout();
@@ -43,17 +44,60 @@ export const useAuthStore = create<AuthState>()((set) => ({
         useProgramDetailsStore.getState().clearCache();
       }
 
-      // Check if program data exists (recovery after old logout that cleared userStore)
+      // Check localStorage first
       const existingProgram = useProgramStore.getState().program;
-      const hasExistingData = existingProgram !== null;
+      if (existingProgram) {
+        userStore.setUser({
+          id: user.id,
+          email: user.email || '',
+          name: user.user_metadata?.name || user.email?.split('@')[0] || '',
+          createdAt: user.created_at,
+          hasCompletedSetup: true,
+          programStartDate: existingProgram.startDate,
+        });
+        set({ userId: user.id, isAuthenticated: true, isLoading: false });
+        return;
+      }
 
-      userStore.setUser({
-        id: user.id,
-        email: user.email || '',
-        name: user.user_metadata?.name || user.email?.split('@')[0] || '',
-        createdAt: user.created_at,
-        hasCompletedSetup: hasExistingData,
-        programStartDate: existingProgram?.startDate ?? null,
+      // No local data — keep loading while we check backend
+      set({ userId: user.id, isAuthenticated: true, isLoading: true });
+
+      getUserProgram(user.id).then(backendProgram => {
+        if (backendProgram?.google_file_id) {
+          // User completed setup before — restore from backend
+          userStore.setUser({
+            id: user.id,
+            email: user.email || '',
+            name: user.user_metadata?.name || user.email?.split('@')[0] || '',
+            createdAt: user.created_at,
+            hasCompletedSetup: true,
+            programStartDate: backendProgram.created_at,
+          });
+          // Re-create local program structure
+          useProgramStore.getState().initializeProgram(backendProgram.created_at);
+        } else {
+          // Truly new user — needs onboarding
+          userStore.setUser({
+            id: user.id,
+            email: user.email || '',
+            name: user.user_metadata?.name || user.email?.split('@')[0] || '',
+            createdAt: user.created_at,
+            hasCompletedSetup: false,
+            programStartDate: null,
+          });
+        }
+        set({ isLoading: false });
+      }).catch(() => {
+        // On error, default to new user flow
+        userStore.setUser({
+          id: user.id,
+          email: user.email || '',
+          name: user.user_metadata?.name || user.email?.split('@')[0] || '',
+          createdAt: user.created_at,
+          hasCompletedSetup: false,
+          programStartDate: null,
+        });
+        set({ isLoading: false });
       });
     } else {
       set({ userId: null, isAuthenticated: false, isLoading: false });
