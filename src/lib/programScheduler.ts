@@ -56,12 +56,31 @@ export function getCompletedWorkoutCount(logs: WorkoutLog[]): number {
 }
 
 /**
- * Calculate current streak of consecutive workouts without missing.
+ * Get completed workout count for a specific week (out of 3).
  */
-export function getStreak(logs: WorkoutLog[]): number {
-  const sorted = [...logs]
-    .filter(l => l.completedAt !== null)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+export function getWeekCompletionCount(logs: WorkoutLog[], weekNumber: number): number {
+  return logs.filter(l => l.weekNumber === weekNumber && l.completedAt !== null).length;
+}
 
-  return sorted.length; // Simplified: count all completed workouts
+/**
+ * Calculate streak: consecutive completed weeks (all 3 workouts done)
+ * counting backwards from the latest fully completed week.
+ */
+export function getWeekStreak(logs: WorkoutLog[], currentWeek: number): number {
+  let streak = 0;
+  // Check from the week before current backwards (current week is still in progress)
+  for (let w = currentWeek - 1; w >= 1; w--) {
+    const weekDone = logs.filter(l => l.weekNumber === w && l.completedAt !== null).length;
+    if (weekDone >= 3) {
+      streak++;
+    } else {
+      break;
+    }
+  }
+  // Also check current week — if already all 3 done, count it too
+  const currentDone = logs.filter(l => l.weekNumber === currentWeek && l.completedAt !== null).length;
+  if (currentDone >= 3) {
+    streak++;
+  }
+  return streak;
 }

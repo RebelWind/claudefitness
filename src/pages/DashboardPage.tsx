@@ -4,7 +4,7 @@ import { useUserStore } from '../stores/userStore';
 import { useWorkoutStore } from '../stores/workoutStore';
 import { useProgramStore } from '../stores/programStore';
 import { useProgramDetailsStore } from '../stores/programDetailsStore';
-import { getCurrentWeek, getCompletedWorkoutCount } from '../lib/programScheduler';
+import { getCurrentWeek, getCompletedWorkoutCount, getWeekCompletionCount, getWeekStreak } from '../lib/programScheduler';
 import { insertProgram } from '../lib/n8nService';
 import type { ProgramInput } from '../lib/n8nService';
 import { EXERCISE_EXCEL_ROWS } from '../constants/exerciseRows';
@@ -48,6 +48,8 @@ export default function DashboardPage() {
   const totalCompleted = getCompletedWorkoutCount(logs);
   const totalWorkouts = 36;
   const overallProgress = (totalCompleted / totalWorkouts) * 100;
+  const thisWeekDone = getWeekCompletionCount(logs, currentWeek);
+  const weekStreak = getWeekStreak(logs, currentWeek);
 
   // Completed workouts for the selected week
   const selectedWeekLogs = logs.filter(l => l.weekNumber === selectedWeek && l.completedAt);
@@ -421,14 +423,18 @@ export default function DashboardPage() {
         </Card>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-2 gap-3">
-          <Card>
-            <div className="text-2xl font-bold text-primary-light">{totalCompleted}</div>
-            <div className="text-xs text-text-muted">Toplam Antrenman</div>
+        <div className="grid grid-cols-3 gap-3">
+          <Card className="text-center">
+            <div className="text-2xl font-bold text-primary-light">{thisWeekDone}/3</div>
+            <div className="text-xs text-text-muted">Bu Hafta</div>
           </Card>
-          <Card>
-            <div className="text-2xl font-bold text-success">{currentWeek}</div>
-            <div className="text-xs text-text-muted">Aktif Hafta</div>
+          <Card className="text-center">
+            <div className="text-2xl font-bold text-accent">%{Math.round(overallProgress)}</div>
+            <div className="text-xs text-text-muted">İlerleme</div>
+          </Card>
+          <Card className="text-center">
+            <div className="text-2xl font-bold text-success">{weekStreak}</div>
+            <div className="text-xs text-text-muted">Streak{weekStreak > 0 ? ' 🔥' : ''}</div>
           </Card>
         </div>
       </PageContainer>
