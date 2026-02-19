@@ -4,8 +4,13 @@ import { useAuthStore } from '../stores/authStore';
 import { useUserStore } from '../stores/userStore';
 import { useWorkoutStore } from '../stores/workoutStore';
 import { useProgramStore } from '../stores/programStore';
+import { useProgramDetailsStore } from '../stores/programDetailsStore';
 import { EXERCISES, GROUP_LABELS, GROUP_COLORS } from '../constants/exercises';
-import type { ExerciseGroup } from '../types/exercise';
+import { getExcelMapping } from '../constants/exerciseMapping';
+import { insertBaslangic } from '../lib/n8nService';
+import type { BaslangicInput } from '../lib/n8nService';
+import { saveBaselines } from '../lib/supabaseSync';
+import type { ExerciseGroup, ExerciseId } from '../types/exercise';
 import Badge from '../components/ui/Badge';
 import Header from '../components/layout/Header';
 import PageContainer from '../components/layout/PageContainer';
@@ -18,9 +23,17 @@ export default function ProfilePage() {
   const logout = useAuthStore(s => s.logout);
   const user = useUserStore(s => s.user);
   const baselines = useUserStore(s => s.baselines);
+  const updateBaseline = useUserStore(s => s.updateBaseline);
   const logs = useWorkoutStore(s => s.logs);
   const resetProgram = useProgramStore(s => s.reset);
+  const googleFileId = useProgramDetailsStore(s => s.googleFileId);
+
   const [showResetModal, setShowResetModal] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Edit state: group-exerciseId → { kg, reps }
+  const [editValues, setEditValues] = useState<Record<string, { kg: number; reps: number }>>({});
 
   const completedLogs = logs.filter(l => l.completedAt);
   const totalDuration = completedLogs.reduce(
@@ -40,6 +53,75 @@ export default function ProfilePage() {
     useWorkoutStore.getState().setLogs([]);
     setShowResetModal(false);
     navigate('/setup', { replace: true });
+  };
+
+  const handleStartEdit = () => {
+    const values: Record<string, { kg: number; reps: number }> = {};
+    for (const b of baselines) {
+      values[`${b.group}-${b.exerciseId}`] = {
+        kg: b.initialWeightKg,
+        reps: b.initialReps,
+      };
+    }
+    setEditValues(values);
+    setEditMode(true);
+  };
+
+  const handleEditValue = (group: ExerciseGroup, exerciseId: ExerciseId, field: 'kg' | 'reps', value: number) => {
+    const key = `${group}-${exerciseId}`;
+    setEditValues(prev => ({
+      ...prev,
+      [key]: { ...prev[key], [field]: Math.max(0, value) },
+    }));
+  };
+
+  const handleSaveEdits = async () => {
+    setIsSaving(true);
+    try {
+      // Update local store
+      for (const b of baselines) {
+        const key = `${b.group}-${b.exerciseId}`;
+        const edited = editValues[key];
+        if (edited && (edited.kg !== b.initialWeightKg || edited.reps !== b.initialReps)) {
+          updateBaseline(b.group, b.exerciseId, edited.kg, edited.reps);
+        }
+      }
+
+      // Build n8n payload from edited values
+      if (googleFileId) {
+        const inputs: BaslangicInput[] = [];
+        for (const b of baselines) {
+          const key = `${b.group}-${b.exerciseId}`;
+          const edited = editValues[key];
+          const mapping = getExcelMapping(b.group, b.exerciseId);
+          if (mapping && edited) {
+            inputs.push({
+              search_key: mapping.search_key,
+              girilen_agirlik: edited.kg,
+              girilen_tekrar: edited.reps,
+              excel_satir_no: mapping.excel_satir_no,
+            });
+          }
+        }
+        if (inputs.length > 0) {
+          // Use weight 0 since kilo param is the user body weight (not used in update)
+          insertBaslangic(googleFileId, 0, inputs).catch(() => {});
+        }
+      }
+
+      // Save to Supabase
+      const userId = user?.id;
+      if (userId) {
+        const updatedBaselines = useUserStore.getState().baselines;
+        saveBaselines(userId, updatedBaselines).catch(() => {});
+      }
+
+      setEditMode(false);
+    } catch {
+      // ignore
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -92,7 +174,34 @@ export default function ProfilePage() {
           );
           return (
             <Card className="mb-4">
-              <h3 className="font-bold text-text mb-3">Başlangıç Değerleri</h3>
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-bold text-text">Başlangıç Değerleri</h3>
+                {!editMode ? (
+                  <button
+                    onClick={handleStartEdit}
+                    className="text-xs font-semibold text-primary-light active:text-primary"
+                  >
+                    Düzenle
+                  </button>
+                ) : (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setEditMode(false)}
+                      disabled={isSaving}
+                      className="text-xs font-semibold text-text-muted active:text-text"
+                    >
+                      İptal
+                    </button>
+                    <button
+                      onClick={handleSaveEdits}
+                      disabled={isSaving}
+                      className="text-xs font-semibold text-success active:text-success/80"
+                    >
+                      {isSaving ? 'Kaydediliyor...' : 'Kaydet'}
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="flex flex-col gap-4">
                 {groups.map(g => {
                   const colors = GROUP_COLORS[g];
@@ -103,18 +212,53 @@ export default function ProfilePage() {
                         <Badge group={g}>{g}</Badge>
                         <span className={`text-xs font-medium ${colors.text}`}>{GROUP_LABELS[g]}</span>
                       </div>
-                      <div className={`flex flex-col gap-1.5 pl-2 border-l-2 ${colors.border}`}>
-                        {groupBaselines.map(b => (
-                          <div key={`${b.group}-${b.exerciseId}`} className="flex justify-between text-sm">
-                            <span className="text-text-muted">{EXERCISES[b.exerciseId].name}</span>
-                            <span className="text-text font-medium">
-                              {b.initialWeightKg > 0 && `${b.initialWeightKg}kg - `}
-                              {EXERCISES[b.exerciseId].trackingUnit === 'seconds'
-                                ? `${b.initialReps}sn`
-                                : `${b.initialReps} tekrar`}
-                            </span>
-                          </div>
-                        ))}
+                      <div className={`flex flex-col gap-2 pl-2 border-l-2 ${colors.border}`}>
+                        {groupBaselines.map(b => {
+                          const key = `${b.group}-${b.exerciseId}`;
+                          const edited = editValues[key];
+                          const isSeconds = EXERCISES[b.exerciseId].trackingUnit === 'seconds';
+                          const unit = isSeconds ? 'sn' : 'tekrar';
+
+                          return (
+                            <div key={key}>
+                              <div className="text-sm text-text-muted mb-1">{EXERCISES[b.exerciseId].name}</div>
+                              {editMode && edited ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      inputMode="decimal"
+                                      step="0.5"
+                                      value={edited.kg || ''}
+                                      onChange={e => handleEditValue(b.group, b.exerciseId, 'kg', parseFloat(e.target.value) || 0)}
+                                      className="w-20 h-9 text-center text-sm font-bold rounded-lg bg-background
+                                        border border-surface-light text-text focus:outline-none focus:border-primary-light"
+                                    />
+                                    <span className="text-xs text-text-muted">kg</span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      inputMode="numeric"
+                                      value={edited.reps || ''}
+                                      onChange={e => handleEditValue(b.group, b.exerciseId, 'reps', parseInt(e.target.value) || 0)}
+                                      className="w-16 h-9 text-center text-sm font-bold rounded-lg bg-background
+                                        border border-surface-light text-text focus:outline-none focus:border-primary-light"
+                                    />
+                                    <span className="text-xs text-text-muted">{unit}</span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-sm text-text font-medium">
+                                  {b.initialWeightKg > 0 && `${b.initialWeightKg} kg - `}
+                                  {isSeconds
+                                    ? `${b.initialReps} sn`
+                                    : `${b.initialReps} tekrar`}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );
