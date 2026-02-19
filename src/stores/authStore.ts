@@ -5,6 +5,9 @@ import { useWorkoutStore } from './workoutStore';
 import { useProgramStore } from './programStore';
 import { useProgramDetailsStore } from './programDetailsStore';
 import { getUserProgram } from '../lib/programService';
+import { getBaslangicDetails } from '../lib/n8nService';
+import { exerciseIdFromSearchKey } from '../constants/exerciseMapping';
+import type { ExerciseBaseline } from '../types/user';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface AuthState {
@@ -62,7 +65,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
       // No local data — keep loading while we check backend
       set({ userId: user.id, isAuthenticated: true, isLoading: true });
 
-      getUserProgram(user.id).then(backendProgram => {
+      getUserProgram(user.id).then(async backendProgram => {
         if (backendProgram?.google_file_id) {
           // User completed setup before — restore from backend
           userStore.setUser({
@@ -75,6 +78,27 @@ export const useAuthStore = create<AuthState>()((set) => ({
           });
           // Re-create local program structure
           useProgramStore.getState().initializeProgram(backendProgram.created_at);
+
+          // Restore baselines from Google Sheets
+          try {
+            const details = await getBaslangicDetails(backendProgram.google_file_id);
+            const baselines: ExerciseBaseline[] = [];
+            const seen = new Set<string>();
+            for (const input of details.inputs) {
+              const exerciseId = exerciseIdFromSearchKey(input.search_key);
+              if (exerciseId && !seen.has(exerciseId)) {
+                seen.add(exerciseId);
+                baselines.push({
+                  exerciseId,
+                  initialWeightKg: input.agirlik,
+                  initialReps: input['tekrar sayisi'],
+                });
+              }
+            }
+            userStore.setBaselines(baselines);
+          } catch {
+            // Baselines couldn't be fetched — non-critical, profile will just be empty
+          }
         } else {
           // Truly new user — needs onboarding
           userStore.setUser({
