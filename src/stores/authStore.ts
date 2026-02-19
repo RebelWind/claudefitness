@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import { useUserStore } from './userStore';
+import { useProgramDetailsStore } from './programDetailsStore';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface AuthState {
@@ -86,5 +87,6 @@ export const useAuthStore = create<AuthState>()((set) => ({
     await supabase.auth.signOut();
     set({ userId: null, isAuthenticated: false });
     useUserStore.getState().clear();
+    useProgramDetailsStore.getState().clearCache();
   },
 }));

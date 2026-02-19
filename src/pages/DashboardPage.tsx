@@ -3,11 +3,8 @@ import { useNavigate } from 'react-router';
 import { useUserStore } from '../stores/userStore';
 import { useWorkoutStore } from '../stores/workoutStore';
 import { useProgramStore } from '../stores/programStore';
+import { useProgramDetailsStore } from '../stores/programDetailsStore';
 import { getCurrentWeek, getCompletedWorkoutCount } from '../lib/programScheduler';
-import { getProgramDetails } from '../lib/n8nService';
-import type { ProgramExercise } from '../lib/n8nService';
-import { getUserProgram } from '../lib/programService';
-import { supabase } from '../lib/supabase';
 import type { WorkoutType } from '../types/exercise';
 import Header from '../components/layout/Header';
 import PageContainer from '../components/layout/PageContainer';
@@ -27,15 +24,18 @@ export default function DashboardPage() {
   const activeSession = useWorkoutStore(s => s.activeSession);
   const program = useProgramStore(s => s.program);
 
+  // Program details cache store
+  const weeklyPrograms = useProgramDetailsStore(s => s.weeklyPrograms);
+  const loading = useProgramDetailsStore(s => s.loading);
+  const error = useProgramDetailsStore(s => s.error);
+  const fetchWeek = useProgramDetailsStore(s => s.fetchWeek);
+
   const currentWeek = program?.startDate
     ? getCurrentWeek(program.startDate)
     : 1;
 
   const [selectedWeek, setSelectedWeek] = useState(currentWeek);
   const [selectedWorkout, setSelectedWorkout] = useState<WorkoutType>('A');
-  const [programExercises, setProgramExercises] = useState<ProgramExercise[]>([]);
-  const [loadingProgram, setLoadingProgram] = useState(false);
-  const [programError, setProgramError] = useState('');
 
   const totalCompleted = getCompletedWorkoutCount(logs);
   const totalWorkouts = 36;
@@ -44,6 +44,9 @@ export default function DashboardPage() {
   // Completed workouts for the selected week
   const selectedWeekLogs = logs.filter(l => l.weekNumber === selectedWeek && l.completedAt);
 
+  // Get program exercises from cache (or empty while loading)
+  const programExercises = weeklyPrograms[selectedWeek] || [];
+
   // Auto-select first incomplete workout when week changes
   useEffect(() => {
     const completedTypes = new Set(selectedWeekLogs.map(l => l.workoutType));
@@ -51,35 +54,14 @@ export default function DashboardPage() {
     setSelectedWorkout(firstIncomplete || 'A');
   }, [selectedWeek, selectedWeekLogs.length]);
 
-  // Fetch program details when selected week changes
+  // Fetch week data — store handles caching
   useEffect(() => {
-    let cancelled = false;
-    async function fetchProgram() {
-      setLoadingProgram(true);
-      setProgramError('');
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const userId = session?.user?.id;
-        if (!userId) return;
+    fetchWeek(selectedWeek);
+  }, [selectedWeek, fetchWeek]);
 
-        const userProgram = await getUserProgram(userId);
-        if (!userProgram?.google_file_id) return;
-
-        const data = await getProgramDetails(
-          userProgram.google_file_id,
-          `Hafta ${selectedWeek}`,
-        );
-        if (!cancelled) setProgramExercises(data);
-      } catch (err) {
-        console.error('Program detayları alınamadı:', err);
-        if (!cancelled) setProgramError('Program verileri yüklenemedi.');
-      } finally {
-        if (!cancelled) setLoadingProgram(false);
-      }
-    }
-    fetchProgram();
-    return () => { cancelled = true; };
-  }, [selectedWeek]);
+  const handleRefresh = () => {
+    fetchWeek(selectedWeek, true);
+  };
 
   const handleStartWorkout = (type: WorkoutType) => {
     if (activeSession) {
@@ -209,22 +191,33 @@ export default function DashboardPage() {
                 Hafta {selectedWeek} - Gün {DAY_MAP[selectedWorkout]}
               </p>
             </div>
-            {isWorkoutDone && (
-              <Badge variant="success">Tamamlandı</Badge>
-            )}
+            <div className="flex items-center gap-2">
+              {isWorkoutDone && (
+                <Badge variant="success">Tamamlandı</Badge>
+              )}
+              <button
+                onClick={handleRefresh}
+                disabled={loading}
+                className="w-8 h-8 rounded-lg bg-surface-light flex items-center justify-center
+                  text-text-muted text-sm active:bg-surface transition-colors disabled:opacity-50"
+                title="Yenile"
+              >
+                &#8635;
+              </button>
+            </div>
           </div>
 
-          {loadingProgram && (
+          {loading && programExercises.length === 0 && (
             <p className="text-sm text-primary-light text-center animate-pulse py-4">
               Program yükleniyor...
             </p>
           )}
 
-          {programError && (
-            <p className="text-sm text-error text-center py-2">{programError}</p>
+          {error && programExercises.length === 0 && (
+            <p className="text-sm text-error text-center py-2">{error}</p>
           )}
 
-          {!loadingProgram && workoutExercises.length > 0 && (
+          {workoutExercises.length > 0 && (
             <div className="flex flex-col gap-1.5 mb-4">
               {workoutExercises.map(pe => (
                 <div key={pe.search_key} className="flex items-center justify-between py-1.5">
@@ -259,7 +252,7 @@ export default function DashboardPage() {
               fullWidth
               size="lg"
               onClick={() => handleStartWorkout(selectedWorkout)}
-              disabled={loadingProgram || programExercises.length === 0 || (hasActiveSession && !isActiveForSelected)}
+              disabled={loading || programExercises.length === 0 || (hasActiveSession && !isActiveForSelected)}
             >
               {isWorkoutDone ? 'Tekrar Yap' : 'Antrenmana Başla'}
             </Button>
