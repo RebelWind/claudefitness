@@ -48,7 +48,6 @@ export default function WorkoutSessionPage() {
   const navigate = useNavigate();
   const activeSession = useWorkoutStore(s => s.activeSession);
   const updateSet = useWorkoutStore(s => s.updateSet);
-  const updateWeight = useWorkoutStore(s => s.updateWeight);
   const completeExercise = useWorkoutStore(s => s.completeExercise);
   const nextExercise = useWorkoutStore(s => s.nextExercise);
   const prevExercise = useWorkoutStore(s => s.prevExercise);
@@ -234,43 +233,6 @@ export default function WorkoutSessionPage() {
                   </div>
                 </div>
               )}
-
-              {/* Weight Input */}
-              <div className="bg-surface-light/50 rounded-xl p-3 mb-4">
-                <p className="text-xs text-text-muted font-semibold mb-2">Ağırlık (kg)</p>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => updateWeight(activeSession.currentExerciseIndex, (currentExercise.weightKg || 0) - 2.5)}
-                    className="w-11 h-11 rounded-xl bg-background text-text-muted font-bold text-xl
-                      flex items-center justify-center active:bg-surface"
-                  >
-                    -
-                  </button>
-                  <div className="flex-1 relative">
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      step="0.5"
-                      value={currentExercise.weightKg || ''}
-                      onChange={e => {
-                        const val = parseFloat(e.target.value) || 0;
-                        updateWeight(activeSession.currentExerciseIndex, val);
-                      }}
-                      placeholder="0"
-                      className="w-full h-11 bg-background border border-surface-light rounded-xl
-                        text-text text-center text-lg font-bold focus:outline-none focus:border-primary-light"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-text-muted">kg</span>
-                  </div>
-                  <button
-                    onClick={() => updateWeight(activeSession.currentExerciseIndex, (currentExercise.weightKg || 0) + 2.5)}
-                    className="w-11 h-11 rounded-xl bg-primary text-white font-bold text-xl
-                      flex items-center justify-center active:bg-primary-dark"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
 
               {/* Working Sets */}
               <p className="text-xs text-text-muted font-semibold mb-2">Çalışma Setleri</p>

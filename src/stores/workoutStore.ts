@@ -21,14 +21,13 @@ interface WorkoutState {
     programExercises: ProgramExercise[],
   ) => void;
   updateSet: (exerciseIndex: number, setIndex: number, reps: number) => void;
-  updateWeight: (exerciseIndex: number, weight: number) => void;
   completeExercise: (exerciseIndex: number) => void;
   nextExercise: () => void;
   prevExercise: () => void;
   completeWorkout: () => void;
   abandonWorkout: () => void;
   setLogs: (logs: WorkoutLog[]) => void;
-  updateLogSets: (logId: string, searchKey: string, sets: number[], weightKg?: number) => void;
+  updateLogSets: (logId: string, searchKey: string, sets: number[]) => void;
 }
 
 export const useWorkoutStore = create<WorkoutState>()(
@@ -69,15 +68,6 @@ export const useWorkoutStore = create<WorkoutState>()(
             isComplete: false,
           },
         });
-      },
-
-      updateWeight: (exerciseIndex, weight) => {
-        const session = get().activeSession;
-        if (!session) return;
-
-        const exercises = [...session.exercises];
-        exercises[exerciseIndex] = { ...exercises[exerciseIndex], weightKg: Math.max(0, weight) };
-        set({ activeSession: { ...session, exercises } });
       },
 
       updateSet: (exerciseIndex, setIndex, reps) => {
@@ -154,17 +144,14 @@ export const useWorkoutStore = create<WorkoutState>()(
 
       setLogs: (logs) => set({ logs }),
 
-      updateLogSets: (logId, searchKey, newSets, weightKg) => {
+      updateLogSets: (logId, searchKey, newSets) => {
         const logs = get().logs.map(log => {
           if (log.id !== logId) return log;
           return {
             ...log,
-            exercises: log.exercises.map(ex => {
-              if (ex.searchKey !== searchKey) return ex;
-              const updated = { ...ex, sets: newSets };
-              if (weightKg !== undefined) updated.weightKg = weightKg;
-              return updated;
-            }),
+            exercises: log.exercises.map(ex =>
+              ex.searchKey === searchKey ? { ...ex, sets: newSets } : ex,
+            ),
           };
         });
         set({ logs });
