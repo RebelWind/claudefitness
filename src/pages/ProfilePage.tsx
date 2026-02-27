@@ -10,6 +10,7 @@ import { getExcelMapping } from '../constants/exerciseMapping';
 import { insertBaslangic } from '../lib/n8nService';
 import type { BaslangicInput } from '../lib/n8nService';
 import { saveBaselines } from '../lib/supabaseSync';
+import { supabase } from '../lib/supabase';
 import type { ExerciseGroup, ExerciseId } from '../types/exercise';
 import Badge from '../components/ui/Badge';
 import Header from '../components/layout/Header';
@@ -29,6 +30,9 @@ export default function ProfilePage() {
   const googleFileId = useProgramDetailsStore(s => s.googleFileId);
 
   const [showResetModal, setShowResetModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -46,6 +50,28 @@ export default function ProfilePage() {
   const handleLogout = async () => {
     await logout();
     navigate('/login', { replace: true });
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'SİL') return;
+    setIsDeleting(true);
+    try {
+      // Delete auth user via RPC — cascades to all tables
+      const { error } = await supabase.rpc('delete_own_account');
+      if (error) throw error;
+
+      // Clear all local stores
+      useUserStore.getState().clear();
+      useWorkoutStore.getState().abandonWorkout();
+      useWorkoutStore.getState().setLogs([]);
+      useProgramStore.getState().reset();
+      useProgramDetailsStore.getState().clearCache();
+
+      navigate('/login', { replace: true });
+    } catch (err) {
+      console.error('Hesap silme hatası:', err);
+      setIsDeleting(false);
+    }
   };
 
   const handleReset = () => {
@@ -287,6 +313,12 @@ export default function ProfilePage() {
           >
             Çıkış Yap
           </Button>
+          <button
+            onClick={() => { setShowDeleteModal(true); setDeleteConfirmText(''); }}
+            className="text-xs text-text-muted underline mt-2 self-center active:text-error"
+          >
+            Hesabımı Sil
+          </button>
         </div>
       </PageContainer>
 
@@ -301,6 +333,51 @@ export default function ProfilePage() {
           <Button variant="danger" onClick={handleReset} className="flex-1">
             Sıfırla
           </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={showDeleteModal}
+        onClose={() => { if (!isDeleting) setShowDeleteModal(false); }}
+        title="Hesabı Sil"
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-text-muted text-sm">
+            Hesabınız ve tüm verileriniz (antrenman kayıtları, başlangıç değerleri, program bilgileri)
+            kalıcı olarak silinecektir. Bu işlem geri alınamaz.
+          </p>
+          <div>
+            <label className="text-xs text-text-muted block mb-1">
+              Onaylamak için <span className="font-bold text-error">SİL</span> yazın
+            </label>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={e => setDeleteConfirmText(e.target.value)}
+              placeholder="SİL"
+              disabled={isDeleting}
+              className="w-full h-10 px-3 text-sm rounded-lg bg-background border border-surface-light
+                text-text focus:outline-none focus:border-error placeholder:text-text-muted/40"
+            />
+          </div>
+          <div className="flex gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => setShowDeleteModal(false)}
+              className="flex-1"
+              disabled={isDeleting}
+            >
+              Vazgec
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDeleteAccount}
+              className="flex-1"
+              disabled={deleteConfirmText !== 'SİL' || isDeleting}
+            >
+              {isDeleting ? 'Siliniyor...' : 'Hesabı Sil'}
+            </Button>
+          </div>
         </div>
       </Modal>
     </>
