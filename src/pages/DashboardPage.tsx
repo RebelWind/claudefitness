@@ -365,10 +365,15 @@ export default function DashboardPage() {
               {completedLog.exercises.map((ex, idx) => {
                 const editingSets = editSets[ex.searchKey || ''];
                 const kg = ex.weightKg > 0 ? ex.weightKg : (programKgMap[ex.searchKey || ''] || 0);
-                const kgLabel = ex.weightLabel
+                let kgLabel = ex.weightLabel
                   || (kg > 0 ? `${kg} kg` : '')
                   || programLabelMap[ex.searchKey || '']
                   || '';
+                if (!kgLabel) {
+                  const exId = exerciseIdFromSearchKey(ex.searchKey || '');
+                  const bl = exId ? baselines.find(b => b.exerciseId === exId) : null;
+                  if (!bl || bl.initialWeightKg === 0) kgLabel = 'vücut a.';
+                }
                 return (
                   <div key={ex.searchKey || idx} className="py-2">
                     <div className="flex items-center justify-between">
@@ -433,7 +438,17 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-1 mb-4">
               {workoutExercises.map(pe => {
                 const peKgNum = Number(pe.kg);
-                const peKgLabel = isNaN(peKgNum) ? String(pe.kg) : (peKgNum > 0 ? `${peKgNum} kg` : '');
+                let peKgLabel: string;
+                if (typeof pe.kg === 'string' && pe.kg && isNaN(peKgNum)) {
+                  peKgLabel = pe.kg;
+                } else if (peKgNum > 0) {
+                  peKgLabel = `${peKgNum} kg`;
+                } else {
+                  // kg is 0 — bodyweight exercise if baseline weight is also 0
+                  const exId = exerciseIdFromSearchKey(pe.search_key);
+                  const bl = exId ? baselines.find(b => b.exerciseId === exId) : null;
+                  peKgLabel = (!bl || bl.initialWeightKg === 0) ? 'vücut a.' : '';
+                }
                 return (
                 <div key={pe.search_key} className="py-2">
                   <div className="flex items-center justify-between">
