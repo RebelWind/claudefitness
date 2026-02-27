@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import type { ExerciseBaseline } from '../types/user';
 import type { ExerciseGroup } from '../types/exercise';
 import type { WorkoutLog } from '../types/workout';
+import type { ProgramExercise } from './n8nService';
 
 // ── Baselines ──
 
@@ -81,4 +82,51 @@ export async function getWorkoutLogsFromDb(userId: string): Promise<WorkoutLog[]
     completedAt: row.completed_at,
     durationSeconds: row.duration_seconds,
   }));
+}
+
+// ── Weekly Programs (cached from N8N/Google Sheets) ──
+
+export async function saveWeeklyProgram(
+  userId: string,
+  weekNumber: number,
+  exercises: ProgramExercise[],
+): Promise<void> {
+  const { error } = await supabase
+    .from('weekly_programs')
+    .upsert({
+      user_id: userId,
+      week_number: weekNumber,
+      exercises,
+      fetched_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,week_number' });
+
+  if (error) throw error;
+}
+
+export async function getWeeklyProgram(
+  userId: string,
+  weekNumber: number,
+): Promise<ProgramExercise[] | null> {
+  const { data, error } = await supabase
+    .from('weekly_programs')
+    .select('exercises')
+    .eq('user_id', userId)
+    .eq('week_number', weekNumber)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.exercises ?? null;
+}
+
+export async function invalidateWeeklyProgram(
+  userId: string,
+  weekNumber: number,
+): Promise<void> {
+  const { error } = await supabase
+    .from('weekly_programs')
+    .delete()
+    .eq('user_id', userId)
+    .eq('week_number', weekNumber);
+
+  if (error) throw error;
 }

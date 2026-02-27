@@ -31,6 +31,7 @@ export default function DashboardPage() {
   const updateLogSets = useWorkoutStore(s => s.updateLogSets);
   const program = useProgramStore(s => s.program);
   const googleFileId = useProgramDetailsStore(s => s.googleFileId);
+  const invalidateNextWeek = useProgramDetailsStore(s => s.invalidateNextWeek);
 
   // Program details cache store
   const weeklyPrograms = useProgramDetailsStore(s => s.weeklyPrograms);
@@ -205,6 +206,9 @@ export default function DashboardPage() {
       useProgramDetailsStore.setState(s => ({
         weeklyPrograms: { ...s.weeklyPrograms, [selectedWeek]: undefined as any },
       }));
+
+      // Next week's weights changed in Excel — invalidate cache
+      await invalidateNextWeek(selectedWeek);
 
       // Update local log
       for (const [key, sets] of Object.entries(editSets)) {

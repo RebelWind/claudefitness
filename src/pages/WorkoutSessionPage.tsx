@@ -30,6 +30,7 @@ export default function WorkoutSessionPage() {
   const markWorkoutComplete = useProgramStore(s => s.markWorkoutComplete);
 
   const googleFileId = useProgramDetailsStore(s => s.googleFileId);
+  const invalidateNextWeek = useProgramDetailsStore(s => s.invalidateNextWeek);
 
   const [showSummary, setShowSummary] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
@@ -121,6 +122,8 @@ export default function WorkoutSessionPage() {
             `Hafta ${session.weekNumber}`,
             inputs,
           );
+          // Weights for next week changed in Excel — invalidate cache
+          await invalidateNextWeek(session.weekNumber);
         } catch (err) {
           console.error('Excel güncelleme hatası:', err);
         } finally {
