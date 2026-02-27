@@ -1,5 +1,9 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useUserStore } from '../stores/userStore';
+import { supabase } from '../lib/supabase';
+import { createNewProgram, generateProgramKey } from '../lib/n8nService';
+import { saveUserProgram, getUserProgram } from '../lib/programService';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 
@@ -37,6 +41,64 @@ const FEATURES = [
 export default function WelcomePage() {
   const navigate = useNavigate();
   const user = useUserStore(s => s.user);
+  const [loading, setLoading] = useState(false);
+  const [statusMsg, setStatusMsg] = useState('');
+  const [error, setError] = useState('');
+
+  const handleStart = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+
+      if (!userId) {
+        setError('Oturum bulunamadı. Lütfen tekrar giriş yapın.');
+        setLoading(false);
+        return;
+      }
+
+      // Check if program already exists
+      setStatusMsg('Program kontrol ediliyor...');
+      const existingProgram = await getUserProgram(userId);
+
+      if (!existingProgram) {
+        // No program — create via N8N webhook
+        setStatusMsg('Program dosyası oluşturuluyor...');
+        const programKey = generateProgramKey();
+        const programName = `${programKey}-SuperHeroDongu`;
+
+        const result = await createNewProgram(programKey);
+
+        if (!result.success) {
+          setError('Program oluşturulamadı. Lütfen tekrar deneyin.');
+          setStatusMsg('');
+          setLoading(false);
+          return;
+        }
+
+        // Save to Supabase
+        setStatusMsg('Program kaydediliyor...');
+        await saveUserProgram(
+          userId,
+          programKey,
+          programName,
+          result.googleFileId,
+          result.googleFileName,
+        );
+      }
+
+      setStatusMsg('');
+      setLoading(false);
+      navigate('/setup');
+    } catch (err) {
+      console.error('Program oluşturma hatası:', err);
+      setError('Bir hata oluştu. Lütfen tekrar deneyin.');
+      setStatusMsg('');
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-dvh flex flex-col px-6 py-8">
@@ -72,13 +134,25 @@ export default function WelcomePage() {
           <Button
             fullWidth
             size="lg"
-            onClick={() => navigate('/setup')}
+            onClick={handleStart}
+            disabled={loading}
           >
-            Programı Başlat
+            {loading ? 'İşleniyor...' : 'Programı Başlat'}
           </Button>
-          <p className="text-xs text-text-muted text-center">
-            İlk olarak her hareket için başlangıç değerlerini gireceksin.
-          </p>
+
+          {statusMsg && (
+            <p className="text-sm text-primary-light text-center animate-pulse">{statusMsg}</p>
+          )}
+
+          {error && (
+            <p className="text-sm text-error text-center">{error}</p>
+          )}
+
+          {!statusMsg && !error && (
+            <p className="text-xs text-text-muted text-center">
+              İlk olarak her hareket için başlangıç değerlerini gireceksin.
+            </p>
+          )}
         </div>
       </div>
     </div>
