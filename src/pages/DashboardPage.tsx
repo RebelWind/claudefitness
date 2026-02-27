@@ -372,13 +372,12 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-1 mb-4">
               {completedLog.exercises.map((ex, idx) => {
                 const editingSets = editSets[ex.searchKey || ''];
-                // Program details (Excel) is the source of truth for kg
-                const programKg = programKgMap[ex.searchKey || ''] || 0;
-                const kg = programKg > 0 ? programKg : ex.weightKg;
+                // For completed workouts, use the logged weight (what was actually used)
+                const kg = ex.weightKg;
                 let kgLabel = ex.weightLabel
                   || (kg > 0 ? `${kg} kg` : '')
-                  || programLabelMap[ex.searchKey || '']
                   || '';
+                // Only check baselines for bodyweight exercises if no label exists
                 if (!kgLabel) {
                   const exId = exerciseIdFromSearchKey(ex.searchKey || '');
                   const bl = exId ? baselines.find(b => b.exerciseId === exId) : null;
