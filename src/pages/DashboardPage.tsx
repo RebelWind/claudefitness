@@ -47,6 +47,11 @@ export default function DashboardPage() {
   const [editSets, setEditSets] = useState<Record<string, number[]>>({});
   const [isSaving, setIsSaving] = useState(false);
 
+  // Sync selectedWeek when program data loads/changes (e.g. after async restore)
+  useEffect(() => {
+    setSelectedWeek(currentWeek);
+  }, [currentWeek]);
+
   const totalCompleted = getCompletedWorkoutCount(logs);
   const totalWorkouts = 36;
   const overallProgress = (totalCompleted / totalWorkouts) * 100;

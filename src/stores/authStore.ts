@@ -6,29 +6,35 @@ import { useProgramStore } from './programStore';
 import { useProgramDetailsStore } from './programDetailsStore';
 import { getUserProgram } from '../lib/programService';
 import { getBaslangicDetails, getProgramDetails } from '../lib/n8nService';
-import type { ProgramExercise } from '../lib/n8nService';
-import { EXERCISE_EXCEL_MAPPING, exerciseIdFromSearchKey } from '../constants/exerciseMapping';
+import { EXERCISE_EXCEL_MAPPING } from '../constants/exerciseMapping';
 import { getCurrentWeek } from '../lib/programScheduler';
 import {
   getBaselinesFromDb, saveBaselines,
-  getWorkoutLogsFromDb, saveWorkoutLog,
+  getWorkoutLogsFromDb,
 } from '../lib/supabaseSync';
 import type { ExerciseBaseline } from '../types/user';
-import type { WorkoutLog, ExerciseLog } from '../types/workout';
-import type { WorkoutType } from '../types/exercise';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
-
-const DAY_MAP: Record<string, 1 | 2 | 3> = { A: 1, B: 2, C: 3 };
 
 /**
  * Rebuild programStore from startDate + workout logs (no API call).
+ * Filters out unreliable "restored-*" logs that were created by the
+ * old n8n restore logic (which falsely detected completed workouts
+ * from Excel default/formula values).
  */
 function rebuildProgramFromLogs(startDate: string) {
   const programStore = useProgramStore.getState();
   programStore.initializeProgram(startDate);
 
-  const logs = useWorkoutStore.getState().logs;
-  for (const log of logs) {
+  const workoutStore = useWorkoutStore.getState();
+  const allLogs = workoutStore.logs;
+
+  // Remove fake "restored-*" logs created by old n8n restore
+  const cleanLogs = allLogs.filter(log => !log.id.startsWith('restored-'));
+  if (cleanLogs.length !== allLogs.length) {
+    workoutStore.setLogs(cleanLogs);
+  }
+
+  for (const log of cleanLogs) {
     if (log.completedAt) {
       programStore.markWorkoutComplete(log.weekNumber, log.dayInWeek, log.id);
     }
@@ -101,11 +107,9 @@ async function restoreFromN8n(
     saveBaselines(supabaseUser.id, baselines).catch(() => {});
   } catch { /* ignore */ }
 
-  // ── Restore workout logs ──
+  // ── Cache program details (no workout logs — Excel set values are unreliable) ──
   try {
     const weekCount = getCurrentWeek(createdAt);
-    const restoredLogs: WorkoutLog[] = [];
-    const programStore = useProgramStore.getState();
 
     for (let w = 1; w <= Math.min(weekCount, 12); w++) {
       const exercises = await getProgramDetails(googleFileId, `Hafta ${w}`);
@@ -115,55 +119,6 @@ async function restoreFromN8n(
         googleFileId,
         weeklyPrograms: { ...s.weeklyPrograms, [w]: exercises },
       }));
-
-      for (const type of ['A', 'B', 'C'] as WorkoutType[]) {
-        const group = `W${type}`;
-        const workoutExercises = exercises.filter((e: ProgramExercise) => e.grup === group);
-        const hasSetData = workoutExercises.some((e: ProgramExercise) => (e.set1 ?? 0) > 0);
-        if (!hasSetData) continue;
-
-        const exerciseLogs: ExerciseLog[] = workoutExercises.map((pe: ProgramExercise) => {
-          const setCount = parseInt(pe.set_x_tekrar.match(/^(\d+)x/)?.[1] || '3');
-          const allSets = [pe.set1 ?? 0, pe.set2 ?? 0, pe.set3 ?? 0];
-          if (pe.set4 != null) allSets.push(pe.set4);
-          return {
-            exerciseId: exerciseIdFromSearchKey(pe.search_key) || 'bench_press' as any,
-            weightKg: typeof pe.kg === 'number' ? pe.kg : Number(pe.kg) || 0,
-            weightLabel: typeof pe.kg === 'string' && isNaN(Number(pe.kg)) ? pe.kg : undefined,
-            sets: allSets.slice(0, setCount),
-            completed: true,
-            searchKey: pe.search_key,
-            exerciseName: pe.egzersiz_adi,
-            targetSetsTekrar: pe.set_x_tekrar,
-            rpe: pe.rpe,
-            warmupSets: pe.isinma_setleri,
-          };
-        });
-
-        const logId = `restored-w${w}-${type}`;
-        const log: WorkoutLog = {
-          id: logId,
-          userId: supabaseUser.id,
-          weekNumber: w,
-          workoutType: type,
-          dayInWeek: DAY_MAP[type],
-          date: createdAt.split('T')[0],
-          exercises: exerciseLogs,
-          startedAt: createdAt,
-          completedAt: createdAt,
-          durationSeconds: null,
-        };
-
-        restoredLogs.push(log);
-        programStore.markWorkoutComplete(w, DAY_MAP[type], logId);
-
-        // Backfill to Supabase
-        saveWorkoutLog(supabaseUser.id, log).catch(() => {});
-      }
-    }
-
-    if (restoredLogs.length > 0) {
-      useWorkoutStore.getState().setLogs(restoredLogs);
     }
   } catch { /* ignore */ }
 }
