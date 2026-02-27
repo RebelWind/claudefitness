@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router';
+import { useNavigate } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -68,11 +68,8 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        <p className="text-center text-sm text-text-muted mt-6">
-          Hesabınız yok mu?{' '}
-          <Link to="/register" className="text-primary-light font-medium">
-            Kayıt Ol
-          </Link>
+        <p className="text-center text-xs text-text-muted/50 mt-6">
+          Bu uygulama yalnızca davetli kullanıcılar içindir.
         </p>
       </div>
     </div>
