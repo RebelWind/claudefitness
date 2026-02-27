@@ -4,7 +4,7 @@ import { useUserStore } from '../stores/userStore';
 import { useWorkoutStore } from '../stores/workoutStore';
 import { useProgramStore } from '../stores/programStore';
 import { useProgramDetailsStore } from '../stores/programDetailsStore';
-import { getCurrentWeek, getCompletedWorkoutCount, getWeekCompletionCount, getWeekStreak } from '../lib/programScheduler';
+import { getCompletedWorkoutCount, getWeekCompletionCount, getWeekStreak } from '../lib/programScheduler';
 import { insertProgram } from '../lib/n8nService';
 import type { ProgramInput } from '../lib/n8nService';
 import { EXERCISE_EXCEL_ROWS } from '../constants/exerciseRows';
@@ -38,9 +38,8 @@ export default function DashboardPage() {
   const error = useProgramDetailsStore(s => s.error);
   const fetchWeek = useProgramDetailsStore(s => s.fetchWeek);
 
-  const currentWeek = program?.startDate
-    ? getCurrentWeek(program.startDate)
-    : 1;
+  // Use progression-based week (advances only when all 3 workouts are done)
+  const currentWeek = program?.currentWeek ?? 1;
 
   const [selectedWeek, setSelectedWeek] = useState(currentWeek);
   const [selectedWorkout, setSelectedWorkout] = useState<WorkoutType>('A');
