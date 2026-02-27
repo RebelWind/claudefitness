@@ -16,14 +16,13 @@ import type { ExerciseBaseline } from '../types/user';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 /**
- * Rebuild programStore from startDate + workout logs (no API call).
- * Filters out unreliable "restored-*" logs that were created by the
- * old n8n restore logic (which falsely detected completed workouts
- * from Excel default/formula values).
+ * Rebuild programStore from startDate + workout logs.
+ * Uses Supabase current_week as the authoritative source — logs only
+ * determine which individual workouts show as completed within weeks.
  */
-function rebuildProgramFromLogs(startDate: string) {
+function rebuildProgramFromLogs(startDate: string, currentWeek: number = 1) {
   const programStore = useProgramStore.getState();
-  programStore.initializeProgram(startDate);
+  programStore.initializeProgram(startDate, currentWeek);
 
   const workoutStore = useWorkoutStore.getState();
   const allLogs = workoutStore.logs;
@@ -39,13 +38,17 @@ function rebuildProgramFromLogs(startDate: string) {
       programStore.markWorkoutComplete(log.weekNumber, log.dayInWeek, log.id);
     }
   }
+
+  // Override currentWeek with the Supabase value (source of truth)
+  // markWorkoutComplete may have incorrectly advanced it based on log data
+  programStore.setCurrentWeek(currentWeek);
 }
 
 /**
  * Restore from Supabase DB (fast: 2 queries).
  * Returns true if data was found, false if Supabase is empty.
  */
-async function restoreFromSupabase(userId: string, startDate: string): Promise<boolean> {
+async function restoreFromSupabase(userId: string, startDate: string, currentWeek: number): Promise<boolean> {
   const userStore = useUserStore.getState();
   let hasData = false;
 
@@ -67,9 +70,9 @@ async function restoreFromSupabase(userId: string, startDate: string): Promise<b
     }
   } catch { /* ignore */ }
 
-  // Rebuild program from logs
+  // Rebuild program from logs with Supabase current_week as source of truth
   if (hasData) {
-    rebuildProgramFromLogs(startDate);
+    rebuildProgramFromLogs(startDate, currentWeek);
   }
 
   return hasData;
@@ -165,9 +168,9 @@ export const useAuthStore = create<AuthState>()((set) => ({
         return;
       }
 
-      // Rebuild programStore (no persist, always needed)
+      // Rebuild programStore with locally persisted currentWeek
       if (localUser.programStartDate) {
-        rebuildProgramFromLogs(localUser.programStartDate);
+        rebuildProgramFromLogs(localUser.programStartDate, localUser.currentWeek ?? 1);
       }
 
       // All critical data present → fast path
@@ -182,6 +185,8 @@ export const useAuthStore = create<AuthState>()((set) => ({
 
     getUserProgram(user.id).then(async backendProgram => {
       if (backendProgram?.google_file_id) {
+        const currentWeek = backendProgram.current_week ?? 1;
+
         userStore.setUser({
           id: user.id,
           email: user.email || '',
@@ -189,12 +194,13 @@ export const useAuthStore = create<AuthState>()((set) => ({
           createdAt: user.created_at,
           hasCompletedSetup: true,
           programStartDate: backendProgram.created_at,
+          currentWeek,
         });
 
-        useProgramStore.getState().initializeProgram(backendProgram.created_at);
+        useProgramStore.getState().initializeProgram(backendProgram.created_at, currentWeek);
 
         // Try Supabase first (fast: 2 queries)
-        const restored = await restoreFromSupabase(user.id, backendProgram.created_at);
+        const restored = await restoreFromSupabase(user.id, backendProgram.created_at, currentWeek);
 
         if (!restored) {
           // Supabase empty → fallback to n8n (slow, also backfills Supabase)
@@ -219,7 +225,6 @@ export const useAuthStore = create<AuthState>()((set) => ({
         createdAt: user.created_at,
         hasCompletedSetup: false,
         programStartDate: null,
-        bodyWeightKg: 0,
       });
       set({ isLoading: false });
     });

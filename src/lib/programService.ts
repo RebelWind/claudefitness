@@ -8,6 +8,7 @@ export interface UserProgram {
   google_file_id: string | null;
   google_file_name: string | null;
   created_at: string;
+  current_week: number;
 }
 
 export async function saveUserProgram(
@@ -44,4 +45,13 @@ export async function getUserProgram(userId: string): Promise<UserProgram | null
 
   if (error) throw error;
   return data;
+}
+
+export async function updateCurrentWeek(userId: string, week: number): Promise<void> {
+  const { error } = await supabase
+    .from('user_programs')
+    .update({ current_week: week })
+    .eq('user_id', userId);
+
+  if (error) throw error;
 }

@@ -176,14 +176,26 @@ export default function WorkoutSessionPage() {
     const logs = useWorkoutStore.getState().logs;
     const completedLog = logs[logs.length - 1];
     if (completedLog) {
+      const prevWeek = useProgramStore.getState().program?.currentWeek ?? 1;
       markWorkoutComplete(activeSession.weekNumber, activeSession.dayInWeek, completedLog.id);
+      const newWeek = useProgramStore.getState().program?.currentWeek ?? 1;
 
       // Save to Supabase in background
       const userId = useUserStore.getState().user?.id;
       if (userId) {
-        saveWorkoutLog(userId, completedLog).catch(() => {
-          // Non-critical — log is in localStorage + Google Sheets
-        });
+        saveWorkoutLog(userId, completedLog).catch(() => {});
+
+        // If week advanced, persist to Supabase + local userStore
+        if (newWeek > prevWeek) {
+          import('../lib/programService').then(({ updateCurrentWeek }) => {
+            updateCurrentWeek(userId, newWeek).catch(() => {});
+          });
+          const userStore = useUserStore.getState();
+          const currentUser = userStore.user;
+          if (currentUser) {
+            userStore.setUser({ ...currentUser, currentWeek: newWeek });
+          }
+        }
       }
     }
 

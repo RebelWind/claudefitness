@@ -4,15 +4,20 @@ import type { WorkoutType } from '../types/exercise';
 
 interface ProgramStoreState {
   program: ProgramState | null;
-  initializeProgram: (startDate: string) => void;
+  initializeProgram: (startDate: string, currentWeek?: number) => void;
   markWorkoutComplete: (weekNumber: number, dayInWeek: 1 | 2 | 3, logId: string) => void;
+  setCurrentWeek: (week: number) => void;
   reset: () => void;
 }
 
-function createWeeks(): WeekPlan[] {
+function createWeeks(currentWeek: number = 1): WeekPlan[] {
   return Array.from({ length: 12 }, (_, i) => ({
     weekNumber: i + 1,
-    status: i === 0 ? 'current' as const : 'upcoming' as const,
+    status: i + 1 < currentWeek
+      ? 'completed' as const
+      : i + 1 === currentWeek
+        ? 'current' as const
+        : 'upcoming' as const,
     workouts: ([1, 2, 3] as const).map(day => ({
       dayInWeek: day,
       type: (['A', 'B', 'C'] as const)[day - 1] as WorkoutType,
@@ -25,13 +30,13 @@ function createWeeks(): WeekPlan[] {
 export const useProgramStore = create<ProgramStoreState>()((set, get) => ({
   program: null,
 
-  initializeProgram: (startDate) => {
+  initializeProgram: (startDate, currentWeek = 1) => {
     set({
       program: {
-        currentWeek: 1,
+        currentWeek,
         totalWeeks: 12,
         startDate,
-        weeks: createWeeks(),
+        weeks: createWeeks(currentWeek),
         isComplete: false,
       },
     });
@@ -72,6 +77,28 @@ export const useProgramStore = create<ProgramStoreState>()((set, get) => ({
         currentWeek: newCurrentWeek,
         weeks,
         isComplete: newCurrentWeek === 12 && allDone,
+      },
+    });
+  },
+
+  setCurrentWeek: (week) => {
+    const program = get().program;
+    if (!program) return;
+
+    const weeks = program.weeks.map(w => ({
+      ...w,
+      status: w.weekNumber < week
+        ? 'completed' as const
+        : w.weekNumber === week
+          ? 'current' as const
+          : 'upcoming' as const,
+    }));
+
+    set({
+      program: {
+        ...program,
+        currentWeek: week,
+        weeks,
       },
     });
   },

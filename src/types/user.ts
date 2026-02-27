@@ -7,6 +7,7 @@ export interface User {
   createdAt: string;
   hasCompletedSetup: boolean;
   programStartDate: string | null;
+  currentWeek?: number;
 }
 
 export interface ExerciseBaseline {
