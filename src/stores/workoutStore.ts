@@ -152,14 +152,18 @@ export const useWorkoutStore = create<WorkoutState>()(
         let patched: WorkoutLog | null = null;
         const logs = get().logs.map(log => {
           if (log.id !== logId) return log;
-          const needsHeal = log.exercises.some(ex => ex.weightKg === 0 && ex.searchKey && kgMap[ex.searchKey] > 0);
+          const needsHeal = log.exercises.some(ex => {
+            if (!ex.searchKey) return false;
+            const correctKg = kgMap[ex.searchKey];
+            return correctKg > 0 && ex.weightKg !== correctKg;
+          });
           if (!needsHeal) return log;
           patched = {
             ...log,
             exercises: log.exercises.map(ex => {
-              if (ex.weightKg > 0 || !ex.searchKey) return ex;
-              const kg = kgMap[ex.searchKey];
-              return kg > 0 ? { ...ex, weightKg: kg } : ex;
+              if (!ex.searchKey) return ex;
+              const correctKg = kgMap[ex.searchKey];
+              return correctKg > 0 ? { ...ex, weightKg: correctKg } : ex;
             }),
           };
           return patched;

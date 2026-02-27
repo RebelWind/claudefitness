@@ -152,8 +152,12 @@ export default function DashboardPage() {
   const healLogWeights = useWorkoutStore(s => s.healLogWeights);
   useEffect(() => {
     if (!completedLog || Object.keys(programKgMap).length === 0) return;
-    const hasZeroKg = completedLog.exercises.some(ex => ex.weightKg === 0 && ex.searchKey && programKgMap[ex.searchKey] > 0);
-    if (!hasZeroKg) return;
+    const hasMismatch = completedLog.exercises.some(ex => {
+      if (!ex.searchKey) return false;
+      const correctKg = programKgMap[ex.searchKey];
+      return correctKg > 0 && ex.weightKg !== correctKg;
+    });
+    if (!hasMismatch) return;
 
     const patched = healLogWeights(completedLog.id, programKgMap);
     if (patched && user?.id) {
@@ -368,7 +372,9 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-1 mb-4">
               {completedLog.exercises.map((ex, idx) => {
                 const editingSets = editSets[ex.searchKey || ''];
-                const kg = ex.weightKg > 0 ? ex.weightKg : (programKgMap[ex.searchKey || ''] || 0);
+                // Program details (Excel) is the source of truth for kg
+                const programKg = programKgMap[ex.searchKey || ''] || 0;
+                const kg = programKg > 0 ? programKg : ex.weightKg;
                 let kgLabel = ex.weightLabel
                   || (kg > 0 ? `${kg} kg` : '')
                   || programLabelMap[ex.searchKey || '']
