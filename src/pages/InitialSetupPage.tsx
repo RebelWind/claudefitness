@@ -7,7 +7,7 @@ import { getExcelMapping } from '../constants/exerciseMapping';
 import { insertBaslangic, getBaslangicDetails } from '../lib/n8nService';
 import type { BaslangicInput, BaslangicDetailsResponse, BaslangicDetailInput } from '../lib/n8nService';
 import { EXERCISE_EXCEL_MAPPING } from '../constants/exerciseMapping';
-import { getUserProgram } from '../lib/programService';
+import { ensureProgramExists } from '../lib/programService';
 import { saveBaselines } from '../lib/supabaseSync';
 import { supabase } from '../lib/supabase';
 import type { ExerciseId, ExerciseGroup } from '../types/exercise';
@@ -99,15 +99,14 @@ export default function InitialSetupPage() {
   };
 
   const sendToN8n = async (): Promise<{ googleFileId: string; sentInputs: BaslangicInput[] } | null> => {
-    // Get google_file_id from Supabase
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id;
-    if (!userId) return null;
+    if (!userId) throw new Error('Oturum bulunamadı.');
 
-    const program = await getUserProgram(userId);
+    // Ensure program exists — create via N8N if needed
+    const program = await ensureProgramExists(userId);
     if (!program?.google_file_id) {
-      console.warn('google_file_id bulunamadı, insertBaslangic atlanıyor.');
-      return null;
+      throw new Error('Program oluşturulamadı. Lütfen tekrar deneyin.');
     }
 
     const baslangicInputs = buildBaslangicInputs();
@@ -181,36 +180,38 @@ export default function InitialSetupPage() {
       setSubmitting(true);
       setVerifyError(null);
       try {
-        setStatusMsg('Veriler Excel\'e gönderiliyor...');
+        setStatusMsg('Program kontrol ediliyor...');
         const result = await sendToN8n();
 
-        if (result) {
-          setStatusMsg('Veriler doğrulanıyor...');
-          const remoteData = await getBaslangicDetails(result.googleFileId);
-          const mismatches = verifyBaslangic(result.sentInputs, Number(bodyWeight), remoteData);
-
-          if (mismatches.length > 0) {
-            setVerifyError(mismatches);
-            setStatusMsg('');
-            setSubmitting(false);
-            return;
-          }
-
-          // Verification passed — show summary before proceeding
-          setSummaryData(remoteData);
+        if (!result) {
+          setVerifyError(['Program oluşturulamadı. Lütfen tekrar deneyin.']);
           setStatusMsg('');
           setSubmitting(false);
           return;
         }
+
+        setStatusMsg('Veriler doğrulanıyor...');
+        const remoteData = await getBaslangicDetails(result.googleFileId);
+        const mismatches = verifyBaslangic(result.sentInputs, Number(bodyWeight), remoteData);
+
+        if (mismatches.length > 0) {
+          setVerifyError(mismatches);
+          setStatusMsg('');
+          setSubmitting(false);
+          return;
+        }
+
+        // Verification passed — show summary before proceeding
+        setSummaryData(remoteData);
+        setStatusMsg('');
+        setSubmitting(false);
       } catch (err) {
         console.error('insertBaslangic / doğrulama hatası:', err);
+        const message = err instanceof Error ? err.message : 'Bir hata oluştu.';
+        setVerifyError([message]);
+        setStatusMsg('');
+        setSubmitting(false);
       }
-
-      setStatusMsg('');
-      setSubmitting(false);
-      completeSetup();
-      initializeProgram(new Date().toISOString());
-      navigate('/dashboard', { replace: true });
     }
   };
 

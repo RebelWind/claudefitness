@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useUserStore } from '../stores/userStore';
 import { supabase } from '../lib/supabase';
-import { createNewProgram, generateProgramKey } from '../lib/n8nService';
-import { saveUserProgram, getUserProgram } from '../lib/programService';
+import { ensureProgramExists } from '../lib/programService';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 
@@ -59,34 +58,14 @@ export default function WelcomePage() {
         return;
       }
 
-      // Check if program already exists
-      setStatusMsg('Program kontrol ediliyor...');
-      const existingProgram = await getUserProgram(userId);
+      setStatusMsg('Program oluşturuluyor...');
+      const program = await ensureProgramExists(userId);
 
-      if (!existingProgram) {
-        // No program — create via N8N webhook
-        setStatusMsg('Program dosyası oluşturuluyor...');
-        const programKey = generateProgramKey();
-        const programName = `${programKey}-SuperHeroDongu`;
-
-        const result = await createNewProgram(programKey);
-
-        if (!result.success) {
-          setError('Program oluşturulamadı. Lütfen tekrar deneyin.');
-          setStatusMsg('');
-          setLoading(false);
-          return;
-        }
-
-        // Save to Supabase
-        setStatusMsg('Program kaydediliyor...');
-        await saveUserProgram(
-          userId,
-          programKey,
-          programName,
-          result.googleFileId,
-          result.googleFileName,
-        );
+      if (!program?.google_file_id) {
+        setError('Program oluşturulamadı. Lütfen tekrar deneyin.');
+        setStatusMsg('');
+        setLoading(false);
+        return;
       }
 
       setStatusMsg('');

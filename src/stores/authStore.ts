@@ -168,16 +168,41 @@ export const useAuthStore = create<AuthState>()((set) => ({
         return;
       }
 
-      // Rebuild programStore with locally persisted currentWeek
-      if (localUser.programStartDate) {
-        rebuildProgramFromLogs(localUser.programStartDate, localUser.currentWeek ?? 1);
-      }
+      // hasCompletedSetup is true locally — verify program actually exists in Supabase
+      set({ userId: user.id, isAuthenticated: true, isLoading: true });
+      getUserProgram(user.id).then(backendProgram => {
+        if (!backendProgram?.google_file_id) {
+          // Program doesn't exist in Supabase — reset setup flag
+          userStore.setUser({
+            ...localUser,
+            hasCompletedSetup: false,
+            programStartDate: null,
+          });
+          userStore.setBaselines([]);
+          useProgramStore.getState().reset();
+          set({ isLoading: false });
+          return;
+        }
 
-      // All critical data present → fast path
-      if (useUserStore.getState().baselines.length > 0) {
-        set({ userId: user.id, isAuthenticated: true, isLoading: false });
-        return;
-      }
+        // Program exists — use fast path
+        const currentWeek = backendProgram.current_week ?? localUser.currentWeek ?? 1;
+        if (localUser.programStartDate) {
+          rebuildProgramFromLogs(localUser.programStartDate, currentWeek);
+        }
+
+        if (useUserStore.getState().baselines.length > 0) {
+          set({ isLoading: false });
+          return;
+        }
+
+        // Baselines missing locally — restore from Supabase
+        restoreFromSupabase(user.id, backendProgram.created_at, currentWeek).then(() => {
+          set({ isLoading: false });
+        });
+      }).catch(() => {
+        set({ isLoading: false });
+      });
+      return;
     }
 
     // ── Backend restore ──
