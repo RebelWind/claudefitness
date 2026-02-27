@@ -137,17 +137,6 @@ export default function DashboardPage() {
     return map;
   }, [workoutExercises, baselines]);
 
-  // Map search_key → raw string label (e.g. "vücut a.") for non-numeric kg
-  const programLabelMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const pe of workoutExercises) {
-      if (typeof pe.kg === 'string' && pe.kg && isNaN(Number(pe.kg))) {
-        map[pe.search_key] = pe.kg;
-      }
-    }
-    return map;
-  }, [workoutExercises]);
-
   // Heal old logs where weightKg was stored as 0 (pre-fix data)
   const healLogWeights = useWorkoutStore(s => s.healLogWeights);
   useEffect(() => {
