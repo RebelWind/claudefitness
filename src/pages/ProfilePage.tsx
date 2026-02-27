@@ -130,8 +130,8 @@ export default function ProfilePage() {
           }
         }
         if (inputs.length > 0) {
-          // Wait for Excel to be updated before invalidating cache
-          await insertBaslangic(googleFileId, 0, inputs);
+          // Send -1 to tell N8N not to update body weight (keep existing value)
+          await insertBaslangic(googleFileId, -1, inputs);
 
           // Excel recalculated — clear cached weekly programs so workouts fetch fresh data
           useProgramDetailsStore.setState({ weeklyPrograms: {} });
