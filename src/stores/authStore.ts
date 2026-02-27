@@ -61,11 +61,21 @@ async function restoreFromSupabase(userId: string, startDate: string, currentWee
     }
   } catch { /* ignore */ }
 
-  // Workout logs
+  // Workout logs — merge Supabase logs with local logs for cross-device sync
   try {
-    const logs = await getWorkoutLogsFromDb(userId);
-    if (logs.length > 0) {
-      useWorkoutStore.getState().setLogs(logs);
+    const remoteLogs = await getWorkoutLogsFromDb(userId);
+    if (remoteLogs.length > 0) {
+      const localLogs = useWorkoutStore.getState().logs;
+      // Build a map of remote logs by unique key (week + workout type)
+      const remoteMap = new Map(remoteLogs.map(l => [`${l.weekNumber}-${l.workoutType}`, l]));
+      // Add any local-only logs (not yet synced to Supabase)
+      for (const local of localLogs) {
+        const key = `${local.weekNumber}-${local.workoutType}`;
+        if (!remoteMap.has(key)) {
+          remoteMap.set(key, local);
+        }
+      }
+      useWorkoutStore.getState().setLogs(Array.from(remoteMap.values()));
       hasData = true;
     }
   } catch { /* ignore */ }
@@ -170,7 +180,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
 
       // hasCompletedSetup is true locally — verify program actually exists in Supabase
       set({ userId: user.id, isAuthenticated: true, isLoading: true });
-      getUserProgram(user.id).then(backendProgram => {
+      getUserProgram(user.id).then(async backendProgram => {
         if (!backendProgram?.google_file_id) {
           // Program doesn't exist in Supabase — reset setup flag
           userStore.setUser({
@@ -184,22 +194,15 @@ export const useAuthStore = create<AuthState>()((set) => ({
           return;
         }
 
-        // Program exists — use fast path
+        // Program exists — always sync from Supabase to ensure cross-device data
         const currentWeek = backendProgram.current_week ?? localUser.currentWeek ?? 1;
-        if (localUser.programStartDate) {
-          rebuildProgramFromLogs(localUser.programStartDate, currentWeek);
-        }
-
-        if (useUserStore.getState().baselines.length > 0) {
-          set({ isLoading: false });
-          return;
-        }
-
-        // Baselines missing locally — restore from Supabase
-        restoreFromSupabase(user.id, backendProgram.created_at, currentWeek).then(() => {
-          set({ isLoading: false });
-        });
+        await restoreFromSupabase(user.id, backendProgram.created_at, currentWeek);
+        set({ isLoading: false });
       }).catch(() => {
+        // Offline fallback — use whatever localStorage has
+        if (localUser.programStartDate) {
+          rebuildProgramFromLogs(localUser.programStartDate, localUser.currentWeek ?? 1);
+        }
         set({ isLoading: false });
       });
       return;
