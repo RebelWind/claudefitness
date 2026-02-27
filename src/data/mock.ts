@@ -15,22 +15,22 @@ export const MOCK_USER: User = {
 };
 
 export const MOCK_BASELINES: ExerciseBaseline[] = [
-  { exerciseId: 'bench_press', initialWeightKg: 60, initialReps: 8 },
-  { exerciseId: 'squat', initialWeightKg: 80, initialReps: 8 },
-  { exerciseId: 'overhead_press', initialWeightKg: 40, initialReps: 8 },
-  { exerciseId: 'shoulder_press_machine', initialWeightKg: 30, initialReps: 10 },
-  { exerciseId: 'romanian_dl', initialWeightKg: 60, initialReps: 10 },
-  { exerciseId: 'barbell_row', initialWeightKg: 50, initialReps: 10 },
-  { exerciseId: 'assisted_pull_ups', initialWeightKg: 20, initialReps: 8 },
-  { exerciseId: 'lateral_raises', initialWeightKg: 8, initialReps: 12 },
-  { exerciseId: 'lat_pulldown', initialWeightKg: 40, initialReps: 12 },
-  { exerciseId: 'chest_fly_machine', initialWeightKg: 25, initialReps: 12 },
-  { exerciseId: 'leg_extension', initialWeightKg: 35, initialReps: 12 },
-  { exerciseId: 'overhead_triceps_extension', initialWeightKg: 12, initialReps: 12 },
-  { exerciseId: 'incline_dumbbell_curl', initialWeightKg: 10, initialReps: 12 },
-  { exerciseId: 'crunch', initialWeightKg: 0, initialReps: 20 },
-  { exerciseId: 'leg_raises', initialWeightKg: 0, initialReps: 15 },
-  { exerciseId: 'plank', initialWeightKg: 0, initialReps: 45 },
+  { exerciseId: 'bench_press', group: 'G1', initialWeightKg: 60, initialReps: 8 },
+  { exerciseId: 'squat', group: 'G1', initialWeightKg: 80, initialReps: 8 },
+  { exerciseId: 'overhead_press', group: 'G1', initialWeightKg: 40, initialReps: 8 },
+  { exerciseId: 'shoulder_press_machine', group: 'G2', initialWeightKg: 30, initialReps: 10 },
+  { exerciseId: 'romanian_dl', group: 'G2', initialWeightKg: 60, initialReps: 10 },
+  { exerciseId: 'barbell_row', group: 'G2', initialWeightKg: 50, initialReps: 10 },
+  { exerciseId: 'assisted_pull_ups', group: 'G2', initialWeightKg: 20, initialReps: 8 },
+  { exerciseId: 'lateral_raises', group: 'G3', initialWeightKg: 8, initialReps: 12 },
+  { exerciseId: 'lat_pulldown', group: 'G3', initialWeightKg: 40, initialReps: 12 },
+  { exerciseId: 'chest_fly_machine', group: 'G3', initialWeightKg: 25, initialReps: 12 },
+  { exerciseId: 'leg_extension', group: 'G3', initialWeightKg: 35, initialReps: 12 },
+  { exerciseId: 'overhead_triceps_extension', group: 'G4', initialWeightKg: 12, initialReps: 12 },
+  { exerciseId: 'incline_dumbbell_curl', group: 'G4', initialWeightKg: 10, initialReps: 12 },
+  { exerciseId: 'crunch', group: 'G4', initialWeightKg: 0, initialReps: 20 },
+  { exerciseId: 'leg_raises', group: 'G4', initialWeightKg: 0, initialReps: 15 },
+  { exerciseId: 'plank', group: 'G4', initialWeightKg: 0, initialReps: 45 },
 ];
 
 export const MOCK_WORKOUT_LOGS: WorkoutLog[] = [

@@ -43,11 +43,15 @@ export default function WorkoutSessionPage() {
 
   if (!activeSession && !showSummary) return null;
 
-  const currentExercise: ExerciseLog = activeSession.exercises[activeSession.currentExerciseIndex];
+  // After the early return above, activeSession is guaranteed non-null when showSummary is false.
+  // Use non-null assertion to satisfy TypeScript narrowing.
+  const session = activeSession!;
+
+  const currentExercise: ExerciseLog = session.exercises[session.currentExerciseIndex];
   const exerciseInfo = EXERCISES[currentExercise.exerciseId];
   const displayName = currentExercise.exerciseName || exerciseInfo?.name || 'Egzersiz';
-  const progress = ((activeSession.currentExerciseIndex + 1) / activeSession.exercises.length) * 100;
-  const isLastExercise = activeSession.currentExerciseIndex === activeSession.exercises.length - 1;
+  const progress = ((session.currentExerciseIndex + 1) / session.exercises.length) * 100;
+  const isLastExercise = session.currentExerciseIndex === session.exercises.length - 1;
 
   // Returns max allowed reps for a given set index, or null if unlimited
   const getMaxReps = (setIdx: number): number | null => {
@@ -82,14 +86,14 @@ export default function WorkoutSessionPage() {
   };
 
   const handleSetComplete = (setIdx: number, reps: number) => {
-    updateSet(activeSession.currentExerciseIndex, setIdx, reps);
+    updateSet(session.currentExerciseIndex, setIdx, reps);
   };
 
   const handleNextExercise = async () => {
-    completeExercise(activeSession.currentExerciseIndex);
+    completeExercise(session.currentExerciseIndex);
     if (isLastExercise) {
       // Build inputs payload from all exercises
-      const inputs: ProgramInput[] = activeSession.exercises.map(ex => {
+      const inputs: ProgramInput[] = session.exercises.map(ex => {
         const key = ex.searchKey || '';
         const input: ProgramInput = {
           search_key: key,
@@ -114,7 +118,7 @@ export default function WorkoutSessionPage() {
         try {
           await insertProgram(
             googleFileId,
-            `Hafta ${activeSession.weekNumber}`,
+            `Hafta ${session.weekNumber}`,
             inputs,
           );
         } catch (err) {
@@ -138,7 +142,7 @@ export default function WorkoutSessionPage() {
     const completedLog = logs[logs.length - 1];
     if (completedLog) {
       const prevWeek = useProgramStore.getState().program?.currentWeek ?? 1;
-      markWorkoutComplete(activeSession.weekNumber, activeSession.dayInWeek, completedLog.id);
+      markWorkoutComplete(session.weekNumber, session.dayInWeek, completedLog.id);
       const newWeek = useProgramStore.getState().program?.currentWeek ?? 1;
 
       // Save to Supabase in background
@@ -189,19 +193,19 @@ export default function WorkoutSessionPage() {
         {/* Progress */}
         <div className="py-3">
           <div className="flex justify-between text-xs text-text-muted mb-1">
-            <span>Hareket {activeSession.currentExerciseIndex + 1} / {activeSession.exercises.length}</span>
-            <span>Hafta {activeSession.weekNumber}</span>
+            <span>Hareket {session.currentExerciseIndex + 1} / {session.exercises.length}</span>
+            <span>Hafta {session.weekNumber}</span>
           </div>
           <ProgressBar value={progress} color="success" />
         </div>
 
         {/* Exercise Navigation Dots */}
         <div className="flex justify-center gap-1.5 mb-4">
-          {activeSession.exercises.map((ex, i) => (
+          {session.exercises.map((ex, i) => (
             <div
               key={i}
               className={`w-2 h-2 rounded-full transition-colors ${
-                i === activeSession.currentExerciseIndex
+                i === session.currentExerciseIndex
                   ? 'bg-primary-light'
                   : ex.completed
                     ? 'bg-success'
@@ -283,7 +287,7 @@ export default function WorkoutSessionPage() {
                           max={maxReps ?? undefined}
                           onChange={e => {
                             const val = clampReps(setIdx, parseInt(e.target.value) || 0);
-                            updateSet(activeSession.currentExerciseIndex, setIdx, val);
+                            updateSet(session.currentExerciseIndex, setIdx, val);
                           }}
                           placeholder="0"
                           className="w-full h-11 bg-background border border-surface-light rounded-xl
@@ -310,7 +314,7 @@ export default function WorkoutSessionPage() {
 
             {/* Navigation Buttons */}
             <div className="flex gap-3 mb-6">
-              {activeSession.currentExerciseIndex > 0 && (
+              {session.currentExerciseIndex > 0 && (
                 <Button variant="secondary" onClick={prevExercise} className="flex-1">
                   Önceki
                 </Button>
@@ -333,14 +337,13 @@ export default function WorkoutSessionPage() {
             <div className="text-5xl mb-3">&#128170;</div>
             <h3 className="text-lg font-bold text-text mb-1">Harika!</h3>
             <p className="text-text-muted text-sm mb-4">
-              Workout {workoutType} - Hafta {activeSession?.weekNumber}
+              Workout {workoutType} - Hafta {session.weekNumber}
             </p>
           </div>
 
           {/* Exercise summary with kg + sets */}
-          {activeSession && (
-            <div className="flex flex-col gap-2 mb-4 max-h-64 overflow-y-auto">
-              {activeSession.exercises.map((ex, idx) => {
+          <div className="flex flex-col gap-2 mb-4 max-h-64 overflow-y-auto">
+              {session.exercises.map((ex, idx) => {
                 const exKgLabel = ex.weightLabel || (ex.weightKg > 0 ? `${ex.weightKg} kg` : '');
                 return (
                 <div key={idx} className="flex items-center justify-between bg-surface rounded-xl px-3 py-2">
@@ -367,7 +370,6 @@ export default function WorkoutSessionPage() {
                 );
               })}
             </div>
-          )}
 
           {isSyncing && (
             <p className="text-xs text-primary-light animate-pulse mb-3 text-center">
