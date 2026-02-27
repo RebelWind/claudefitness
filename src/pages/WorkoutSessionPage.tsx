@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useWorkoutStore } from '../stores/workoutStore';
 import { useProgramStore } from '../stores/programStore';
@@ -17,34 +17,6 @@ import Badge from '../components/ui/Badge';
 import ProgressBar from '../components/ui/ProgressBar';
 import Modal from '../components/ui/Modal';
 
-function RestTimer({ seconds, onComplete }: { seconds: number; onComplete: () => void }) {
-  const [remaining, setRemaining] = useState(seconds);
-
-  useEffect(() => {
-    if (remaining <= 0) {
-      onComplete();
-      return;
-    }
-    const timer = setTimeout(() => setRemaining(r => r - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [remaining, onComplete]);
-
-  const mins = Math.floor(remaining / 60);
-  const secs = remaining % 60;
-
-  return (
-    <div className="text-center py-4">
-      <p className="text-sm text-text-muted mb-2">Dinlenme Süresi</p>
-      <div className="text-4xl font-bold text-primary-light font-mono">
-        {mins}:{secs.toString().padStart(2, '0')}
-      </div>
-      <Button variant="ghost" size="sm" onClick={onComplete} className="mt-3">
-        Atla
-      </Button>
-    </div>
-  );
-}
-
 export default function WorkoutSessionPage() {
   const { workoutType } = useParams();
   const navigate = useNavigate();
@@ -59,14 +31,9 @@ export default function WorkoutSessionPage() {
 
   const googleFileId = useProgramDetailsStore(s => s.googleFileId);
 
-  const [showRest, setShowRest] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-
-  const handleRestComplete = useCallback(() => {
-    setShowRest(false);
-  }, []);
 
   useEffect(() => {
     if (!activeSession && !showSummary) {
@@ -81,8 +48,6 @@ export default function WorkoutSessionPage() {
   const displayName = currentExercise.exerciseName || exerciseInfo?.name || 'Egzersiz';
   const progress = ((activeSession.currentExerciseIndex + 1) / activeSession.exercises.length) * 100;
   const isLastExercise = activeSession.currentExerciseIndex === activeSession.exercises.length - 1;
-
-  const restDuration = exerciseInfo?.group === 'G1' || exerciseInfo?.group === 'G2' ? 90 : 60;
 
   // Returns max allowed reps for a given set index, or null if unlimited
   const getMaxReps = (setIdx: number): number | null => {
@@ -118,10 +83,6 @@ export default function WorkoutSessionPage() {
 
   const handleSetComplete = (setIdx: number, reps: number) => {
     updateSet(activeSession.currentExerciseIndex, setIdx, reps);
-    // Show rest timer after each set (except the last one)
-    if (setIdx < currentExercise.sets.length - 1) {
-      setShowRest(true);
-    }
   };
 
   const handleNextExercise = async () => {
@@ -250,11 +211,6 @@ export default function WorkoutSessionPage() {
           ))}
         </div>
 
-        {showRest ? (
-          <Card className="flex-1 flex items-center justify-center">
-            <RestTimer seconds={restDuration} onComplete={handleRestComplete} />
-          </Card>
-        ) : (
           <>
             {/* Exercise Card */}
             <Card className="mb-4">
@@ -368,7 +324,6 @@ export default function WorkoutSessionPage() {
               </Button>
             </div>
           </>
-        )}
       </div>
 
       {/* Summary Modal */}
