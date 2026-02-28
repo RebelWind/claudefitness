@@ -147,7 +147,7 @@ interface AuthState {
   setFromSupabaseUser: (user: SupabaseUser | null) => void;
 }
 
-export const useAuthStore = create<AuthState>()((set) => ({
+export const useAuthStore = create<AuthState>()((set, get) => ({
   userId: null,
   isAuthenticated: false,
   isLoading: true,
