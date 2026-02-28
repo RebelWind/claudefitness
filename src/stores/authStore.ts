@@ -259,6 +259,13 @@ export const useAuthStore = create<AuthState>()((set) => ({
   },
 
   initialize: async () => {
+    // Check if we already have a valid session in state
+    const currentState = get();
+    if (currentState.isAuthenticated && currentState.userId) {
+      // Already authenticated, no need to show loading
+      return;
+    }
+
     set({ isLoading: true });
     const { data: { session } } = await supabase.auth.getSession();
     const setUser = useAuthStore.getState().setFromSupabaseUser;
