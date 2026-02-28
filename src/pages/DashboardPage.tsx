@@ -86,20 +86,33 @@ export default function DashboardPage() {
 
     // Sync to Supabase only if calculatedWeek changed from last sync
     if (calculatedWeek !== lastSyncedWeekRef.current) {
-      console.log('[Dashboard Week Fix] Syncing to Supabase...', calculatedWeek);
+      console.log('[Dashboard Week Fix] Syncing to Supabase... userId:', user.id, 'week:', calculatedWeek);
       lastSyncedWeekRef.current = calculatedWeek;
 
-      import('../lib/programService').then(({ updateCurrentWeek }) => {
-        updateCurrentWeek(user.id, calculatedWeek)
-          .then(() => {
-            console.log('[Dashboard Week Fix] Supabase updated successfully to week', calculatedWeek);
-            // Update local userStore to reflect the DB change
-            useUserStore.getState().setUser({ ...user, currentWeek: calculatedWeek });
-          })
-          .catch((err) => {
-            console.error('[Dashboard Week Fix] Failed to update Supabase:', err);
-            lastSyncedWeekRef.current = null; // Reset on failure to allow retry
-          });
+      import('../lib/programService').then(async ({ updateCurrentWeek, getUserProgram }) => {
+        try {
+          // First, check current state in Supabase
+          const before = await getUserProgram(user.id);
+          console.log('[Dashboard Week Fix] Before update, Supabase shows current_week:', before?.current_week);
+
+          await updateCurrentWeek(user.id, calculatedWeek);
+
+          // Verify the update
+          const after = await getUserProgram(user.id);
+          console.log('[Dashboard Week Fix] After update, Supabase shows current_week:', after?.current_week);
+
+          if (after?.current_week === calculatedWeek) {
+            console.log('[Dashboard Week Fix] ✓ Verified in Supabase!');
+          } else {
+            console.error('[Dashboard Week Fix] ✗ Update did not persist! Expected:', calculatedWeek, 'Got:', after?.current_week);
+          }
+
+          // Update local userStore to reflect the DB change
+          useUserStore.getState().setUser({ ...user, currentWeek: calculatedWeek });
+        } catch (err) {
+          console.error('[Dashboard Week Fix] Failed to update Supabase:', err);
+          lastSyncedWeekRef.current = null; // Reset on failure to allow retry
+        }
       });
     }
   }, [logs, program, user?.id]); // Remove 'user' from deps, only use user?.id
