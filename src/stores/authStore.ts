@@ -178,8 +178,8 @@ export const useAuthStore = create<AuthState>()((set) => ({
         return;
       }
 
-      // hasCompletedSetup is true locally — verify program actually exists in Supabase
-      set({ userId: user.id, isAuthenticated: true, isLoading: true });
+      // hasCompletedSetup is true locally — set authenticated immediately, verify in background
+      set({ userId: user.id, isAuthenticated: true, isLoading: false });
       getUserProgram(user.id).then(async backendProgram => {
         if (!backendProgram?.google_file_id) {
           // Program doesn't exist in Supabase — reset setup flag
