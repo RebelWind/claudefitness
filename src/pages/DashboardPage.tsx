@@ -53,6 +53,40 @@ export default function DashboardPage() {
     setSelectedWeek(currentWeek);
   }, [currentWeek]);
 
+  // Fix currentWeek if logs show a week is fully completed but currentWeek didn't advance
+  useEffect(() => {
+    if (!program) return;
+
+    // Check each week to find the correct currentWeek based on logs
+    let calculatedWeek = 1;
+    for (let w = 1; w <= 12; w++) {
+      const weekLogs = logs.filter(l => l.weekNumber === w && l.completedAt);
+      const weekDoneCount = new Set(weekLogs.map(l => l.workoutType)).size;
+      if (weekDoneCount >= 3) {
+        calculatedWeek = w + 1;
+      } else {
+        break;
+      }
+    }
+
+    // Cap at 12
+    calculatedWeek = Math.min(calculatedWeek, 12);
+
+    // If calculated week differs from stored week, update it
+    if (calculatedWeek !== program.currentWeek) {
+      const updateProgramWeek = useProgramStore.getState().setCurrentWeek;
+      updateProgramWeek(calculatedWeek);
+
+      // Also sync to Supabase
+      const userId = user?.id;
+      if (userId) {
+        import('../lib/programService').then(({ updateCurrentWeek }) => {
+          updateCurrentWeek(userId, calculatedWeek).catch(() => {});
+        });
+      }
+    }
+  }, [logs, program, user]);
+
   const totalCompleted = getCompletedWorkoutCount(logs);
   const totalWorkouts = 36;
   const overallProgress = (totalCompleted / totalWorkouts) * 100;
