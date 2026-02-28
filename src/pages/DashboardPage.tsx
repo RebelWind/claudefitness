@@ -55,7 +55,7 @@ export default function DashboardPage() {
 
   // Fix currentWeek if logs show a week is fully completed but currentWeek didn't advance
   useEffect(() => {
-    if (!program) return;
+    if (!program || !user?.id) return;
 
     // Check each week to find the correct currentWeek based on logs
     let calculatedWeek = 1;
@@ -72,18 +72,25 @@ export default function DashboardPage() {
     // Cap at 12
     calculatedWeek = Math.min(calculatedWeek, 12);
 
-    // If calculated week differs from stored week, update it
-    if (calculatedWeek !== program.currentWeek) {
-      const updateProgramWeek = useProgramStore.getState().setCurrentWeek;
-      updateProgramWeek(calculatedWeek);
+    // Store the original week before any updates
+    const originalWeek = program.currentWeek;
 
-      // Also sync to Supabase
-      const userId = user?.id;
-      if (userId) {
-        import('../lib/programService').then(({ updateCurrentWeek }) => {
-          updateCurrentWeek(userId, calculatedWeek).catch(() => {});
-        });
-      }
+    // Update programStore if needed
+    if (calculatedWeek !== originalWeek) {
+      useProgramStore.getState().setCurrentWeek(calculatedWeek);
+    }
+
+    // Always sync to Supabase if user.currentWeek is outdated
+    // (use user.currentWeek as the source of truth for what's in DB)
+    if (calculatedWeek !== user.currentWeek) {
+      import('../lib/programService').then(({ updateCurrentWeek }) => {
+        updateCurrentWeek(user.id, calculatedWeek)
+          .then(() => {
+            // Update local userStore to reflect the DB change
+            useUserStore.getState().setUser({ ...user, currentWeek: calculatedWeek });
+          })
+          .catch(() => {});
+      });
     }
   }, [logs, program, user]);
 
