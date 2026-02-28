@@ -75,21 +75,26 @@ export default function DashboardPage() {
     // Store the original week before any updates
     const originalWeek = program.currentWeek;
 
+    console.log('[Dashboard Week Fix] calculatedWeek:', calculatedWeek, 'originalWeek:', originalWeek, 'user.currentWeek:', user.currentWeek);
+
     // Update programStore if needed
     if (calculatedWeek !== originalWeek) {
       useProgramStore.getState().setCurrentWeek(calculatedWeek);
     }
 
-    // Always sync to Supabase if user.currentWeek is outdated
-    // (use user.currentWeek as the source of truth for what's in DB)
+    // Always sync to Supabase if different from what's in user store
     if (calculatedWeek !== user.currentWeek) {
+      console.log('[Dashboard Week Fix] Syncing to Supabase...');
       import('../lib/programService').then(({ updateCurrentWeek }) => {
         updateCurrentWeek(user.id, calculatedWeek)
           .then(() => {
+            console.log('[Dashboard Week Fix] Supabase updated successfully');
             // Update local userStore to reflect the DB change
             useUserStore.getState().setUser({ ...user, currentWeek: calculatedWeek });
           })
-          .catch(() => {});
+          .catch((err) => {
+            console.error('[Dashboard Week Fix] Failed to update Supabase:', err);
+          });
       });
     }
   }, [logs, program, user]);
