@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { useUserStore } from '../stores/userStore';
 import { useWorkoutStore } from '../stores/workoutStore';
@@ -22,6 +22,8 @@ const WORKOUT_TYPES: WorkoutType[] = ['A', 'B', 'C'];
 const DAY_MAP: Record<WorkoutType, 1 | 2 | 3> = { A: 1, B: 2, C: 3 };
 
 export default function DashboardPage() {
+  // Track last synced week to avoid duplicate Supabase writes
+  const lastSyncedWeekRef = useRef<number | null>(null);
   const navigate = useNavigate();
   const user = useUserStore(s => s.user);
   const baselines = useUserStore(s => s.baselines);
@@ -75,29 +77,32 @@ export default function DashboardPage() {
     // Store the original week before any updates
     const originalWeek = program.currentWeek;
 
-    console.log('[Dashboard Week Fix] calculatedWeek:', calculatedWeek, 'originalWeek:', originalWeek, 'user.currentWeek:', user.currentWeek);
+    console.log('[Dashboard Week Fix] calculatedWeek:', calculatedWeek, 'originalWeek:', originalWeek, 'lastSynced:', lastSyncedWeekRef.current);
 
     // Update programStore if needed
     if (calculatedWeek !== originalWeek) {
       useProgramStore.getState().setCurrentWeek(calculatedWeek);
     }
 
-    // Always sync to Supabase if different from what's in user store
-    if (calculatedWeek !== user.currentWeek) {
-      console.log('[Dashboard Week Fix] Syncing to Supabase...');
+    // Sync to Supabase only if calculatedWeek changed from last sync
+    if (calculatedWeek !== lastSyncedWeekRef.current) {
+      console.log('[Dashboard Week Fix] Syncing to Supabase...', calculatedWeek);
+      lastSyncedWeekRef.current = calculatedWeek;
+
       import('../lib/programService').then(({ updateCurrentWeek }) => {
         updateCurrentWeek(user.id, calculatedWeek)
           .then(() => {
-            console.log('[Dashboard Week Fix] Supabase updated successfully');
+            console.log('[Dashboard Week Fix] Supabase updated successfully to week', calculatedWeek);
             // Update local userStore to reflect the DB change
             useUserStore.getState().setUser({ ...user, currentWeek: calculatedWeek });
           })
           .catch((err) => {
             console.error('[Dashboard Week Fix] Failed to update Supabase:', err);
+            lastSyncedWeekRef.current = null; // Reset on failure to allow retry
           });
       });
     }
-  }, [logs, program, user]);
+  }, [logs, program, user?.id]); // Remove 'user' from deps, only use user?.id
 
   const totalCompleted = getCompletedWorkoutCount(logs);
   const totalWorkouts = 36;
