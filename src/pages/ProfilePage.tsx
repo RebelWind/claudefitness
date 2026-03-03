@@ -77,6 +77,7 @@ export default function ProfilePage() {
   const handleReset = () => {
     resetProgram();
     useWorkoutStore.getState().setLogs([]);
+    useProgramDetailsStore.getState().invalidateAll();
     setShowResetModal(false);
     navigate('/setup', { replace: true });
   };
@@ -133,8 +134,8 @@ export default function ProfilePage() {
           // Send -1 to tell N8N not to update body weight (keep existing value)
           await insertBaslangic(googleFileId, -1, inputs);
 
-          // Excel recalculated — clear cached weekly programs so workouts fetch fresh data
-          useProgramDetailsStore.setState({ weeklyPrograms: {} });
+          // Excel recalculated — invalidate all program data and trigger reload across all pages
+          useProgramDetailsStore.getState().invalidateAll();
         }
       }
 

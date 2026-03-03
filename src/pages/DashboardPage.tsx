@@ -40,6 +40,7 @@ export default function DashboardPage() {
   const loading = useProgramDetailsStore(s => s.loading);
   const error = useProgramDetailsStore(s => s.error);
   const fetchWeek = useProgramDetailsStore(s => s.fetchWeek);
+  const reloadTrigger = useProgramDetailsStore(s => s.reloadTrigger);
 
   // Use progression-based week (advances only when all 3 workouts are done)
   const currentWeek = program?.currentWeek ?? 1;
@@ -121,7 +122,7 @@ export default function DashboardPage() {
   // Fetch week data — store handles caching
   useEffect(() => {
     fetchWeek(selectedWeek);
-  }, [selectedWeek, fetchWeek]);
+  }, [selectedWeek, fetchWeek, reloadTrigger]);
 
   const handleRefresh = () => {
     fetchWeek(selectedWeek, true);

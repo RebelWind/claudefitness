@@ -11,6 +11,7 @@ interface ProgramDetailsState {
   weeklyPrograms: Record<number, ProgramExercise[]>;
   loading: boolean;
   error: string | null;
+  reloadTrigger: number; // Increment to force reload across all pages
 
   /** Resolve googleFileId from Supabase (cached after first call) */
   ensureGoogleFileId: () => Promise<string | null>;
@@ -20,6 +21,9 @@ interface ProgramDetailsState {
 
   /** Invalidate next week's cache after workout completion */
   invalidateNextWeek: (completedWeek: number) => Promise<void>;
+
+  /** Clear all cached data and trigger reload across all pages */
+  invalidateAll: () => void;
 
   /** Clear all cached data */
   clearCache: () => void;
@@ -32,6 +36,7 @@ export const useProgramDetailsStore = create<ProgramDetailsState>()(
       weeklyPrograms: {},
       loading: false,
       error: null,
+      reloadTrigger: 0,
 
       ensureGoogleFileId: async () => {
         const cached = get().googleFileId;
@@ -124,6 +129,11 @@ export const useProgramDetailsStore = create<ProgramDetailsState>()(
         }
       },
 
+      invalidateAll: () => set(state => ({
+        weeklyPrograms: {},
+        reloadTrigger: state.reloadTrigger + 1,
+      })),
+
       clearCache: () => set({
         googleFileId: null,
         weeklyPrograms: {},
@@ -137,6 +147,7 @@ export const useProgramDetailsStore = create<ProgramDetailsState>()(
       migrate: () => ({ googleFileId: null }),
       partialize: (state) => ({
         googleFileId: state.googleFileId,
+        // reloadTrigger is in-memory only (not persisted)
       }),
     },
   ),
