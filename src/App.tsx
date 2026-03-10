@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router';
+import { Analytics } from '@vercel/analytics/react';
 import BottomNav from './components/layout/BottomNav';
 import { useAuthStore } from './stores/authStore';
 import { useWorkoutStore } from './stores/workoutStore';
@@ -23,6 +24,7 @@ export default function App() {
     <>
       <Outlet />
       {!hideNav && !activeSession && <BottomNav />}
+      <Analytics />
     </>
   );
 }
